@@ -1,0 +1,20 @@
+{
+  "expo": {
+    "name": "BidTrust",
+    "slug": "bidtrust",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "resizeMode": "contain",
+      "backgroundColor": "#1a1a2e"
+    },
+    "assetBundlePatterns": ["**/*"],
+    "ios": { "supportsTablet": true, "bundleIdentifier": "com.bidtrust.app" },
+    "android": { "adaptiveIcon": { "backgroundColor": "#1a1a2e" }, "package": "com.bidtrust.app" },
+    "web": { "bundler": "metro", "output": "single" },
+    "plugins": ["expo-router", "expo-secure-store"],
+    "experiments": { "typedRoutes": true }
+  }
+}
