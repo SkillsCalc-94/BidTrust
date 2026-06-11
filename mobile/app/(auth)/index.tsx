@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import Tilt3D from '../../components/Tilt3D';
 
 const { width } = Dimensions.get('window');
 
@@ -112,8 +113,9 @@ export default function LandingScreen() {
           </ScrollView>
         </Animated.View>
 
-        {/* Phone mockup frame */}
+        {/* Phone mockup frame — interactive 3D tilt */}
         <View style={styles.phoneMockupSection}>
+          <Tilt3D maxTilt={14} glowColor="#e94560">
           <View style={styles.phoneMockupOuter}>
             <View style={styles.phoneMockupInner}>
               {/* Phone screen content */}
@@ -168,6 +170,7 @@ export default function LandingScreen() {
               <View style={styles.phoneNotch} />
             </View>
           </View>
+          </Tilt3D>
 
           {/* Floating stat badges around phone */}
           <View style={styles.floatBadge1}>
