@@ -7,10 +7,12 @@ import {
   StyleSheet,
   Dimensions,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import CountdownTimer from './CountdownTimer';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
-const CARD_WIDTH = (SCREEN_WIDTH - 36) / 2; // 2 columns with padding
+const CARD_WIDTH = (SCREEN_WIDTH - 36) / 2;
+const IMAGE_HEIGHT = CARD_WIDTH * 0.65 / 0.35 * 0.65; // ~65% of card height
 
 interface ListingCardProps {
   listing: {
@@ -24,6 +26,7 @@ interface ListingCardProps {
     verified: boolean;
     listing_photos?: Array<{ url: string; is_primary: boolean; sort_order: number }>;
     bids?: any;
+    seller?: { full_name: string | null } | null;
   };
   onPress: () => void;
 }
@@ -40,10 +43,14 @@ export default function ListingCard({ listing, onPress }: ListingCardProps) {
     : 0;
 
   const isEnded = new Date(listing.auction_end_time) <= new Date();
+  const msLeft = new Date(listing.auction_end_time).getTime() - Date.now();
+  const isUrgent = msLeft > 0 && msLeft < 60 * 60 * 1000;
+
+  const sellerFirst = listing.seller?.full_name?.split(' ')[0] || null;
 
   return (
-    <TouchableOpacity style={styles.card} onPress={onPress} activeOpacity={0.85}>
-      {/* Image */}
+    <TouchableOpacity style={styles.card} onPress={onPress} activeOpacity={0.88}>
+      {/* Full-bleed image */}
       <View style={styles.imageContainer}>
         {primaryPhoto ? (
           <Image
@@ -53,23 +60,41 @@ export default function ListingCard({ listing, onPress }: ListingCardProps) {
           />
         ) : (
           <View style={styles.imagePlaceholder}>
-            <Text style={styles.imagePlaceholderText}>📷</Text>
+            <Ionicons name="camera-outline" size={32} color="#4a4a6a" />
           </View>
         )}
 
-        {/* Badges */}
-        <View style={styles.badgesContainer}>
-          {listing.buy_now_price && (
-            <View style={styles.buyNowBadge}>
-              <Text style={styles.buyNowBadgeText}>Buy Now</Text>
-            </View>
-          )}
-          {listing.verified && (
-            <View style={styles.verifiedBadge}>
-              <Text style={styles.verifiedBadgeText}>✓</Text>
-            </View>
-          )}
+        {/* Dark gradient overlay at bottom */}
+        <View style={styles.imageOverlay} />
+
+        {/* Price overlay bottom-left */}
+        <View style={styles.priceOverlay}>
+          <Text style={styles.priceOverlayText}>
+            ${(listing.current_price || listing.starting_price).toFixed(0)}
+          </Text>
         </View>
+
+        {/* Time badge top-right */}
+        {!isEnded && (
+          <View style={[styles.timeBadge, isUrgent && styles.timeBadgeUrgent]}>
+            <Ionicons name="time-outline" size={9} color="#fff" />
+            <CountdownTimer endTime={listing.auction_end_time} compact />
+          </View>
+        )}
+
+        {/* BUY NOW badge top-left */}
+        {listing.buy_now_price && (
+          <View style={styles.buyNowBadge}>
+            <Text style={styles.buyNowBadgeText}>BUY NOW</Text>
+          </View>
+        )}
+
+        {/* Verified badge */}
+        {listing.verified && (
+          <View style={styles.verifiedBadge}>
+            <Ionicons name="checkmark" size={9} color="#fff" />
+          </View>
+        )}
 
         {isEnded && (
           <View style={styles.endedOverlay}>
@@ -78,22 +103,21 @@ export default function ListingCard({ listing, onPress }: ListingCardProps) {
         )}
       </View>
 
-      {/* Info */}
+      {/* Info section */}
       <View style={styles.info}>
-        <Text style={styles.title} numberOfLines={2}>
+        <Text style={styles.title} numberOfLines={1}>
           {listing.title}
         </Text>
 
-        <Text style={styles.price}>
-          ${(listing.current_price || listing.starting_price).toFixed(2)}
-        </Text>
-
         <View style={styles.footer}>
-          <Text style={styles.bidCount}>
-            {bidCount} bid{bidCount !== 1 ? 's' : ''}
-          </Text>
-          {!isEnded && (
-            <CountdownTimer endTime={listing.auction_end_time} compact />
+          <View style={styles.bidRow}>
+            <Ionicons name="hammer-outline" size={11} color="#4a4a6a" />
+            <Text style={styles.bidCount}>
+              {bidCount} bid{bidCount !== 1 ? 's' : ''}
+            </Text>
+          </View>
+          {sellerFirst && (
+            <Text style={styles.sellerName}>{sellerFirst}</Text>
           )}
         </View>
       </View>
@@ -104,23 +128,23 @@ export default function ListingCard({ listing, onPress }: ListingCardProps) {
 const styles = StyleSheet.create({
   card: {
     width: CARD_WIDTH,
-    backgroundColor: '#16213e',
+    backgroundColor: '#13131f',
     borderRadius: 12,
     overflow: 'hidden',
     marginBottom: 12,
     borderWidth: 1,
-    borderColor: '#0f3460',
+    borderColor: '#252538',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 3,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.4,
+    shadowRadius: 16,
+    elevation: 8,
   },
   imageContainer: {
     position: 'relative',
     width: '100%',
-    height: CARD_WIDTH * 0.75,
-    backgroundColor: '#0f3460',
+    height: CARD_WIDTH * 1.0,
+    backgroundColor: '#1c1c2e',
   },
   image: {
     width: '100%',
@@ -130,39 +154,72 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    backgroundColor: '#1c1c2e',
   },
-  imagePlaceholderText: {
-    fontSize: 32,
-  },
-  badgesContainer: {
+  imageOverlay: {
     position: 'absolute',
-    top: 6,
-    left: 6,
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: '55%',
+    backgroundColor: 'rgba(13,13,20,0.82)',
+  },
+  priceOverlay: {
+    position: 'absolute',
+    bottom: 8,
+    left: 8,
+  },
+  priceOverlayText: {
+    color: '#f59e0b',
+    fontSize: 18,
+    fontWeight: '900',
+    letterSpacing: -0.5,
+    textShadowColor: 'rgba(0,0,0,0.8)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 4,
+  },
+  timeBadge: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    backgroundColor: '#f59e0b',
+    borderRadius: 24,
+    paddingHorizontal: 6,
+    paddingVertical: 3,
     flexDirection: 'row',
-    gap: 4,
+    alignItems: 'center',
+    gap: 3,
+  },
+  timeBadgeUrgent: {
+    backgroundColor: '#e94560',
   },
   buyNowBadge: {
-    backgroundColor: '#4caf50',
-    borderRadius: 4,
-    paddingHorizontal: 5,
-    paddingVertical: 2,
+    position: 'absolute',
+    top: 8,
+    left: 8,
+    backgroundColor: '#e94560',
+    borderRadius: 24,
+    paddingHorizontal: 7,
+    paddingVertical: 3,
   },
   buyNowBadgeText: {
     color: '#fff',
     fontSize: 8,
-    fontWeight: '800',
-    letterSpacing: 0.3,
+    fontWeight: '700',
+    letterSpacing: 0.5,
   },
   verifiedBadge: {
-    backgroundColor: '#2196f3',
-    borderRadius: 4,
-    paddingHorizontal: 5,
-    paddingVertical: 2,
-  },
-  verifiedBadgeText: {
-    color: '#fff',
-    fontSize: 9,
-    fontWeight: '700',
+    position: 'absolute',
+    bottom: 8,
+    right: 8,
+    backgroundColor: '#10b981',
+    borderRadius: 9999,
+    width: 18,
+    height: 18,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1.5,
+    borderColor: '#13131f',
   },
   endedOverlay: {
     position: 'absolute',
@@ -170,31 +227,25 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    backgroundColor: 'rgba(0,0,0,0.55)',
+    backgroundColor: 'rgba(0,0,0,0.65)',
     justifyContent: 'center',
     alignItems: 'center',
   },
   endedOverlayText: {
     color: '#fff',
-    fontWeight: '800',
+    fontWeight: '900',
     fontSize: 14,
-    letterSpacing: 2,
+    letterSpacing: 3,
   },
   info: {
     padding: 10,
+    paddingTop: 8,
   },
   title: {
-    color: '#ffffff',
-    fontSize: 13,
+    color: '#f1f1f1',
+    fontSize: 12,
     fontWeight: '600',
-    lineHeight: 18,
-    marginBottom: 6,
-    minHeight: 36,
-  },
-  price: {
-    color: '#e94560',
-    fontSize: 17,
-    fontWeight: '800',
+    lineHeight: 17,
     marginBottom: 6,
   },
   footer: {
@@ -202,8 +253,17 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
   },
+  bidRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
   bidCount: {
-    color: '#888',
+    color: '#4a4a6a',
+    fontSize: 11,
+  },
+  sellerName: {
+    color: '#4a4a6a',
     fontSize: 11,
   },
 });
