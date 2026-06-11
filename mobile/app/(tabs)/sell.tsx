@@ -283,6 +283,11 @@ export default function SellScreen() {
     setStep(1);
     setPhotos([]);
     setAiEstimate(null);
+    setAiError('');
+    setOriginalPrice('');
+    setQ1Defects('');
+    setQ2Accessories('');
+    setQ3Reason('');
     setTitle('');
     setDescription('');
     setCategory('');

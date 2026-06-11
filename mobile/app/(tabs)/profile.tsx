@@ -12,10 +12,12 @@ import {
   TextInput,
   Modal,
   Dimensions,
+  Platform,
 } from 'react-native';
+import { router } from 'expo-router';
 import { useAuth } from '../../lib/auth';
 import { Ionicons } from '@expo/vector-icons';
-import api from '../../lib/api';
+import supabase from '../../lib/supabase';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -54,34 +56,43 @@ export default function ProfileScreen() {
     : 'Unknown';
 
   async function handleBecomeSeller() {
-    Alert.alert(
-      'Become a Seller',
-      'This will verify your account as a seller so you can list items. Continue?',
-      [
+    const doIt = async () => {
+      setBecomingSellerLoading(true);
+      try {
+        const { error } = await supabase
+          .from('profiles')
+          .update({ role: 'seller', seller_verified: true })
+          .eq('id', user!.id);
+        if (error) throw new Error(error.message);
+        await refreshProfile();
+        Alert.alert('Success', 'You are now a verified seller!');
+      } catch (err: any) {
+        Alert.alert('Error', err.message || 'Failed to verify seller');
+      } finally {
+        setBecomingSellerLoading(false);
+      }
+    };
+
+    if (Platform.OS === 'web') {
+      if (window.confirm('This will verify your account as a seller so you can list items. Continue?')) {
+        await doIt();
+      }
+    } else {
+      Alert.alert('Become a Seller', 'This will verify your account as a seller so you can list items. Continue?', [
         { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Confirm',
-          onPress: async () => {
-            setBecomingSellerLoading(true);
-            try {
-              await api.post('/auth/verify-seller');
-              await refreshProfile();
-              Alert.alert('Success', 'You are now a verified seller!');
-            } catch (err: any) {
-              Alert.alert('Error', err.message || 'Failed to verify seller');
-            } finally {
-              setBecomingSellerLoading(false);
-            }
-          },
-        },
-      ]
-    );
+        { text: 'Confirm', onPress: doIt },
+      ]);
+    }
   }
 
   async function handleSaveProfile() {
     setSavingProfile(true);
     try {
-      await api.put('/auth/profile', { full_name: fullName.trim(), phone: phone.trim() });
+      const { error } = await supabase
+        .from('profiles')
+        .update({ full_name: fullName.trim(), phone: phone.trim() || null })
+        .eq('id', user!.id);
+      if (error) throw new Error(error.message);
       await refreshProfile();
       setEditModalVisible(false);
       Alert.alert('Saved', 'Profile updated successfully');
@@ -93,21 +104,27 @@ export default function ProfileScreen() {
   }
 
   async function handleSignOut() {
-    Alert.alert('Sign Out', 'Are you sure you want to sign out?', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Sign Out',
-        style: 'destructive',
-        onPress: async () => {
-          setSigningOut(true);
-          try {
-            await signOut();
-          } finally {
-            setSigningOut(false);
-          }
-        },
-      },
-    ]);
+    const doSignOut = async () => {
+      setSigningOut(true);
+      try {
+        await signOut();
+        router.replace('/(auth)/login');
+      } catch (err: any) {
+        Alert.alert('Error', err.message || 'Sign out failed');
+        setSigningOut(false);
+      }
+    };
+
+    if (Platform.OS === 'web') {
+      if (window.confirm('Are you sure you want to sign out?')) {
+        await doSignOut();
+      }
+    } else {
+      Alert.alert('Sign Out', 'Are you sure you want to sign out?', [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Sign Out', style: 'destructive', onPress: doSignOut },
+      ]);
+    }
   }
 
   const roleLabel = profile?.role === 'seller' ? 'SELLER' : profile?.role === 'admin' ? 'ADMIN' : 'BUYER';
