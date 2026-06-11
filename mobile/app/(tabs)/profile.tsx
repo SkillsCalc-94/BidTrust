@@ -11,16 +11,25 @@ import {
   Switch,
   TextInput,
   Modal,
+  Dimensions,
 } from 'react-native';
 import { useAuth } from '../../lib/auth';
+import { Ionicons } from '@expo/vector-icons';
 import api from '../../lib/api';
+
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 function StarRating({ rating }: { rating: number | null }) {
   const stars = rating ? Math.round(rating) : 0;
   return (
-    <View style={{ flexDirection: 'row', gap: 2 }}>
+    <View style={{ flexDirection: 'row', gap: 3 }}>
       {[1, 2, 3, 4, 5].map(i => (
-        <Text key={i} style={{ color: i <= stars ? '#FFD700' : '#333', fontSize: 16 }}>★</Text>
+        <Ionicons
+          key={i}
+          name={i <= stars ? 'star' : 'star-outline'}
+          size={14}
+          color={i <= stars ? '#f59e0b' : '#4a4a6a'}
+        />
       ))}
     </View>
   );
@@ -101,11 +110,19 @@ export default function ProfileScreen() {
     ]);
   }
 
+  const roleLabel = profile?.role === 'seller' ? 'SELLER' : profile?.role === 'admin' ? 'ADMIN' : 'BUYER';
+  const roleColor = profile?.role === 'seller' ? '#10b981' : profile?.role === 'admin' ? '#f97316' : '#a0a0b8';
+
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-      {/* Avatar & Info */}
-      <View style={styles.header}>
-        <View style={styles.avatarContainer}>
+
+      {/* Hero Header */}
+      <View style={styles.heroSection}>
+        {/* Decorative background pattern */}
+        <View style={styles.heroBgDecor1} />
+        <View style={styles.heroBgDecor2} />
+
+        <View style={styles.avatarWrapper}>
           {profile?.avatar_url ? (
             <Image source={{ uri: profile.avatar_url }} style={styles.avatar} />
           ) : (
@@ -115,129 +132,176 @@ export default function ProfileScreen() {
           )}
           {profile?.seller_verified && (
             <View style={styles.verifiedBadge}>
-              <Text style={styles.verifiedBadgeText}>✓</Text>
+              <Ionicons name="checkmark" size={11} color="#fff" />
             </View>
           )}
         </View>
 
         <Text style={styles.name}>{profile?.full_name || 'User'}</Text>
         <Text style={styles.email}>{user?.email}</Text>
-        <Text style={styles.memberSince}>Member since {memberSince}</Text>
 
-        <StarRating rating={profile?.rating} />
+        <View style={styles.heroMeta}>
+          <View style={styles.memberSincePill}>
+            <Ionicons name="calendar-outline" size={11} color="#4a4a6a" />
+            <Text style={styles.memberSinceText}>Since {memberSince}</Text>
+          </View>
+          <View style={[styles.rolePill, { borderColor: roleColor }]}>
+            <Text style={[styles.rolePillText, { color: roleColor }]}>{roleLabel}</Text>
+          </View>
+        </View>
 
-        <View style={styles.roleBadge}>
-          <Text style={styles.roleBadgeText}>
-            {profile?.role === 'seller' ? '🏪 Seller' : profile?.role === 'admin' ? '⚡ Admin' : '🛒 Buyer'}
-          </Text>
+        <View style={styles.heroStars}>
+          <StarRating rating={profile?.rating} />
+          {profile?.rating ? (
+            <Text style={styles.ratingText}>{profile.rating.toFixed(1)}</Text>
+          ) : (
+            <Text style={styles.ratingTextMuted}>No ratings yet</Text>
+          )}
         </View>
       </View>
 
-      {/* Stats */}
+      {/* Stats Row */}
       <View style={styles.statsRow}>
-        <View style={styles.statItem}>
+        <View style={styles.statCard}>
           <Text style={styles.statValue}>{profile?.total_sales ?? 0}</Text>
           <Text style={styles.statLabel}>Sales</Text>
+          <Ionicons name="trending-up-outline" size={16} color="#10b981" style={{ marginTop: 4 }} />
         </View>
-        <View style={styles.statDivider} />
-        <View style={styles.statItem}>
+        <View style={styles.statCard}>
           <Text style={styles.statValue}>{profile?.total_purchases ?? 0}</Text>
           <Text style={styles.statLabel}>Purchases</Text>
+          <Ionicons name="bag-outline" size={16} color="#a0a0b8" style={{ marginTop: 4 }} />
         </View>
-        <View style={styles.statDivider} />
-        <View style={styles.statItem}>
-          <Text style={styles.statValue}>{profile?.rating ? profile.rating.toFixed(1) : 'N/A'}</Text>
+        <View style={styles.statCard}>
+          <Text style={[styles.statValue, { color: '#f59e0b' }]}>
+            {profile?.rating ? profile.rating.toFixed(1) : '—'}
+          </Text>
           <Text style={styles.statLabel}>Rating</Text>
+          <Ionicons name="star" size={16} color="#f59e0b" style={{ marginTop: 4 }} />
         </View>
       </View>
 
-      {/* Become Seller */}
+      {/* Become a Seller CTA */}
       {profile?.role === 'buyer' && (
         <TouchableOpacity
-          style={[styles.sellerBtn, becomingSellerLoading && styles.btnDisabled]}
+          style={[styles.sellerCard, becomingSellerLoading && styles.btnDisabled]}
           onPress={handleBecomeSeller}
           disabled={becomingSellerLoading}
+          activeOpacity={0.85}
         >
+          <View style={styles.sellerCardIconWrap}>
+            <Text style={styles.sellerCardIcon}>🏪</Text>
+          </View>
+          <View style={styles.sellerCardContent}>
+            <Text style={styles.sellerCardTitle}>Become a Verified Seller</Text>
+            <Text style={styles.sellerCardSubtitle}>Start listing items and reach buyers today</Text>
+          </View>
           {becomingSellerLoading ? (
-            <ActivityIndicator color="#fff" />
+            <ActivityIndicator color="#e94560" size="small" />
           ) : (
-            <>
-              <Text style={styles.sellerBtnIcon}>🏪</Text>
-              <View>
-                <Text style={styles.sellerBtnTitle}>Become a Seller</Text>
-                <Text style={styles.sellerBtnSubtitle}>Start listing your items today</Text>
-              </View>
-            </>
+            <View style={styles.sellerCardArrow}>
+              <Ionicons name="arrow-forward" size={16} color="#e94560" />
+            </View>
           )}
         </TouchableOpacity>
       )}
 
-      {/* Edit Profile */}
-      <TouchableOpacity style={styles.actionBtn} onPress={() => {
-        setFullName(profile?.full_name || '');
-        setPhone(profile?.phone || '');
-        setEditModalVisible(true);
-      }}>
-        <Text style={styles.actionBtnIcon}>✏️</Text>
-        <Text style={styles.actionBtnText}>Edit Profile</Text>
-        <Text style={styles.actionBtnArrow}>›</Text>
-      </TouchableOpacity>
+      {/* My Account Section */}
+      <Text style={styles.sectionLabel}>MY ACCOUNT</Text>
+      <View style={styles.menuSection}>
+        <TouchableOpacity
+          style={styles.menuRow}
+          onPress={() => {
+            setFullName(profile?.full_name || '');
+            setPhone(profile?.phone || '');
+            setEditModalVisible(true);
+          }}
+        >
+          <View style={[styles.menuIconWrap, { backgroundColor: 'rgba(233,69,96,0.1)' }]}>
+            <Ionicons name="person-outline" size={18} color="#e94560" />
+          </View>
+          <View style={styles.menuContent}>
+            <Text style={styles.menuLabel}>Edit Profile</Text>
+            <Text style={styles.menuSubtext}>Name, phone number</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={16} color="#4a4a6a" />
+        </TouchableOpacity>
 
-      {/* Settings */}
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Settings</Text>
+        <View style={styles.menuDivider} />
 
-        <View style={styles.settingRow}>
-          <View style={styles.settingLeft}>
-            <Text style={styles.settingIcon}>🔔</Text>
-            <View>
-              <Text style={styles.settingLabel}>Notifications</Text>
-              <Text style={styles.settingSubtext}>Bid updates & auction alerts</Text>
-            </View>
+        <View style={styles.menuRow}>
+          <View style={[styles.menuIconWrap, { backgroundColor: 'rgba(245,158,11,0.1)' }]}>
+            <Ionicons name="notifications-outline" size={18} color="#f59e0b" />
+          </View>
+          <View style={styles.menuContent}>
+            <Text style={styles.menuLabel}>Notifications</Text>
+            <Text style={styles.menuSubtext}>Bid updates & alerts</Text>
           </View>
           <Switch
             value={notificationsEnabled}
             onValueChange={setNotificationsEnabled}
-            trackColor={{ false: '#333', true: '#e94560' }}
+            trackColor={{ false: '#252538', true: '#e94560' }}
             thumbColor="#fff"
           />
         </View>
 
-        <View style={styles.settingRow}>
-          <View style={styles.settingLeft}>
-            <Text style={styles.settingIcon}>🌙</Text>
-            <View>
-              <Text style={styles.settingLabel}>Dark Mode</Text>
-              <Text style={styles.settingSubtext}>Always on — built for night owls</Text>
-            </View>
+        <View style={styles.menuDivider} />
+
+        <View style={[styles.menuRow, styles.menuRowDisabled]}>
+          <View style={[styles.menuIconWrap, { backgroundColor: 'rgba(74,74,106,0.15)' }]}>
+            <Ionicons name="card-outline" size={18} color="#4a4a6a" />
           </View>
-          <Switch
-            value={true}
-            disabled
-            trackColor={{ false: '#333', true: '#e94560' }}
-            thumbColor="#fff"
-          />
+          <View style={styles.menuContent}>
+            <Text style={[styles.menuLabel, { color: '#4a4a6a' }]}>Payment Methods</Text>
+            <Text style={styles.menuSubtext}>Coming soon</Text>
+          </View>
+          <View style={styles.comingSoonBadge}>
+            <Text style={styles.comingSoonText}>Soon</Text>
+          </View>
         </View>
-      </View>
 
-      {/* Links */}
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Legal</Text>
-        <TouchableOpacity style={styles.linkRow}>
-          <Text style={styles.linkText}>Privacy Policy</Text>
-          <Text style={styles.actionBtnArrow}>›</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.linkRow}>
-          <Text style={styles.linkText}>Terms of Service</Text>
-          <Text style={styles.actionBtnArrow}>›</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.linkRow}>
-          <Text style={styles.linkText}>Support</Text>
-          <Text style={styles.actionBtnArrow}>›</Text>
+        <View style={styles.menuDivider} />
+
+        <TouchableOpacity style={styles.menuRow}>
+          <View style={[styles.menuIconWrap, { backgroundColor: 'rgba(16,185,129,0.1)' }]}>
+            <Ionicons name="help-circle-outline" size={18} color="#10b981" />
+          </View>
+          <View style={styles.menuContent}>
+            <Text style={styles.menuLabel}>Help & Support</Text>
+            <Text style={styles.menuSubtext}>FAQs, contact us</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={16} color="#4a4a6a" />
         </TouchableOpacity>
       </View>
 
-      {/* Sign Out */}
+      {/* Legal Section */}
+      <Text style={styles.sectionLabel}>LEGAL</Text>
+      <View style={styles.menuSection}>
+        <TouchableOpacity style={styles.menuRow}>
+          <View style={[styles.menuIconWrap, { backgroundColor: 'rgba(160,160,184,0.08)' }]}>
+            <Ionicons name="document-text-outline" size={18} color="#a0a0b8" />
+          </View>
+          <View style={styles.menuContent}>
+            <Text style={styles.menuLabel}>Privacy Policy</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={16} color="#4a4a6a" />
+        </TouchableOpacity>
+
+        <View style={styles.menuDivider} />
+
+        <TouchableOpacity style={styles.menuRow}>
+          <View style={[styles.menuIconWrap, { backgroundColor: 'rgba(160,160,184,0.08)' }]}>
+            <Ionicons name="shield-outline" size={18} color="#a0a0b8" />
+          </View>
+          <View style={styles.menuContent}>
+            <Text style={styles.menuLabel}>Terms of Service</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={16} color="#4a4a6a" />
+        </TouchableOpacity>
+      </View>
+
+      {/* Danger Zone */}
+      <Text style={styles.sectionLabel}>DANGER ZONE</Text>
       <TouchableOpacity
         style={[styles.signOutBtn, signingOut && styles.btnDisabled]}
         onPress={handleSignOut}
@@ -246,7 +310,10 @@ export default function ProfileScreen() {
         {signingOut ? (
           <ActivityIndicator color="#e94560" />
         ) : (
-          <Text style={styles.signOutText}>Sign Out</Text>
+          <>
+            <Ionicons name="log-out-outline" size={18} color="#e94560" />
+            <Text style={styles.signOutText}>Sign Out</Text>
+          </>
         )}
       </TouchableOpacity>
 
@@ -261,11 +328,11 @@ export default function ProfileScreen() {
       >
         <View style={styles.modal}>
           <View style={styles.modalHeader}>
-            <TouchableOpacity onPress={() => setEditModalVisible(false)}>
+            <TouchableOpacity onPress={() => setEditModalVisible(false)} style={styles.modalCancelBtn}>
               <Text style={styles.modalCancel}>Cancel</Text>
             </TouchableOpacity>
             <Text style={styles.modalTitle}>Edit Profile</Text>
-            <TouchableOpacity onPress={handleSaveProfile} disabled={savingProfile}>
+            <TouchableOpacity onPress={handleSaveProfile} disabled={savingProfile} style={styles.modalSaveBtn}>
               {savingProfile ? (
                 <ActivityIndicator size="small" color="#e94560" />
               ) : (
@@ -276,25 +343,25 @@ export default function ProfileScreen() {
 
           <View style={styles.modalContent}>
             <View style={styles.field}>
-              <Text style={styles.label}>Full Name</Text>
+              <Text style={styles.fieldLabel}>Full Name</Text>
               <TextInput
-                style={styles.input}
+                style={styles.modalInput}
                 value={fullName}
                 onChangeText={setFullName}
                 placeholder="Your full name"
-                placeholderTextColor="#666"
+                placeholderTextColor="#4a4a6a"
                 autoCapitalize="words"
               />
             </View>
 
             <View style={styles.field}>
-              <Text style={styles.label}>Phone Number</Text>
+              <Text style={styles.fieldLabel}>Phone Number</Text>
               <TextInput
-                style={styles.input}
+                style={styles.modalInput}
                 value={phone}
                 onChangeText={setPhone}
                 placeholder="+1 (555) 000-0000"
-                placeholderTextColor="#666"
+                placeholderTextColor="#4a4a6a"
                 keyboardType="phone-pad"
               />
             </View>
@@ -308,250 +375,332 @@ export default function ProfileScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#1a1a2e',
+    backgroundColor: '#0d0d14',
   },
   content: {
-    padding: 20,
-    paddingBottom: 40,
+    paddingBottom: 48,
   },
-  header: {
+
+  // Hero
+  heroSection: {
     alignItems: 'center',
-    marginBottom: 24,
-    paddingTop: 8,
-  },
-  avatarContainer: {
+    paddingTop: 40,
+    paddingBottom: 28,
+    paddingHorizontal: 24,
+    backgroundColor: '#13131f',
+    borderBottomWidth: 1,
+    borderBottomColor: '#252538',
     position: 'relative',
-    marginBottom: 12,
+    overflow: 'hidden',
+  },
+  heroBgDecor1: {
+    position: 'absolute',
+    top: -40,
+    right: -40,
+    width: 160,
+    height: 160,
+    borderRadius: 80,
+    backgroundColor: 'rgba(233,69,96,0.06)',
+  },
+  heroBgDecor2: {
+    position: 'absolute',
+    top: 20,
+    left: -60,
+    width: 200,
+    height: 200,
+    borderRadius: 100,
+    backgroundColor: 'rgba(233,69,96,0.03)',
+  },
+  avatarWrapper: {
+    position: 'relative',
+    marginBottom: 14,
   },
   avatar: {
-    width: 96,
-    height: 96,
-    borderRadius: 48,
+    width: 80,
+    height: 80,
+    borderRadius: 40,
     borderWidth: 3,
     borderColor: '#e94560',
   },
   avatarPlaceholder: {
-    width: 96,
-    height: 96,
-    borderRadius: 48,
+    width: 80,
+    height: 80,
+    borderRadius: 40,
     backgroundColor: '#e94560',
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 3,
     borderColor: 'rgba(233,69,96,0.3)',
+    shadowColor: '#e94560',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.4,
+    shadowRadius: 16,
   },
   avatarInitials: {
     color: '#fff',
-    fontSize: 32,
+    fontSize: 28,
     fontWeight: '800',
   },
   verifiedBadge: {
     position: 'absolute',
-    bottom: 2,
-    right: 2,
-    backgroundColor: '#4caf50',
-    width: 24,
-    height: 24,
-    borderRadius: 12,
+    bottom: 0,
+    right: 0,
+    backgroundColor: '#10b981',
+    width: 22,
+    height: 22,
+    borderRadius: 11,
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 2,
-    borderColor: '#1a1a2e',
-  },
-  verifiedBadgeText: {
-    color: '#fff',
-    fontSize: 12,
-    fontWeight: '700',
+    borderColor: '#13131f',
   },
   name: {
-    color: '#fff',
+    color: '#f1f1f1',
     fontSize: 22,
     fontWeight: '800',
-    marginBottom: 4,
+    marginBottom: 2,
+    letterSpacing: -0.3,
   },
   email: {
-    color: '#888',
-    fontSize: 14,
-    marginBottom: 4,
-  },
-  memberSince: {
-    color: '#555',
-    fontSize: 12,
-    marginBottom: 8,
-  },
-  roleBadge: {
-    backgroundColor: '#16213e',
-    borderRadius: 16,
-    paddingHorizontal: 14,
-    paddingVertical: 5,
-    marginTop: 8,
-    borderWidth: 1,
-    borderColor: '#0f3460',
-  },
-  roleBadgeText: {
-    color: '#aaa',
+    color: '#4a4a6a',
     fontSize: 13,
+    marginBottom: 12,
+  },
+  heroMeta: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 12,
+    alignItems: 'center',
+  },
+  memberSincePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#1c1c2e',
+    borderRadius: 24,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderWidth: 1,
+    borderColor: '#252538',
+  },
+  memberSinceText: {
+    color: '#4a4a6a',
+    fontSize: 11,
     fontWeight: '600',
   },
+  rolePill: {
+    borderRadius: 24,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderWidth: 1.5,
+  },
+  rolePillText: {
+    fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: 0.8,
+  },
+  heroStars: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  ratingText: {
+    color: '#f59e0b',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  ratingTextMuted: {
+    color: '#4a4a6a',
+    fontSize: 12,
+  },
+
+  // Stats
   statsRow: {
     flexDirection: 'row',
-    backgroundColor: '#16213e',
-    borderRadius: 16,
-    padding: 20,
-    marginBottom: 20,
-    borderWidth: 1,
-    borderColor: '#0f3460',
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+    gap: 8,
   },
-  statItem: {
+  statCard: {
     flex: 1,
+    backgroundColor: '#13131f',
+    borderRadius: 12,
+    padding: 14,
     alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#252538',
   },
   statValue: {
-    color: '#fff',
+    color: '#f1f1f1',
     fontSize: 24,
-    fontWeight: '800',
-    marginBottom: 4,
+    fontWeight: '900',
+    marginBottom: 2,
+    letterSpacing: -0.5,
   },
   statLabel: {
-    color: '#888',
-    fontSize: 12,
+    color: '#4a4a6a',
+    fontSize: 11,
+    fontWeight: '600',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
-  statDivider: {
-    width: 1,
-    backgroundColor: '#0f3460',
-    marginVertical: 4,
-  },
-  sellerBtn: {
-    backgroundColor: 'rgba(233,69,96,0.15)',
-    borderWidth: 1.5,
-    borderColor: '#e94560',
-    borderRadius: 14,
+
+  // Seller CTA
+  sellerCard: {
+    marginHorizontal: 16,
+    marginBottom: 20,
+    backgroundColor: '#13131f',
+    borderRadius: 16,
     padding: 16,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    marginBottom: 16,
+    borderWidth: 1.5,
+    borderColor: 'rgba(233,69,96,0.35)',
+    shadowColor: '#e94560',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
   },
-  sellerBtnIcon: {
-    fontSize: 28,
+  sellerCardIconWrap: {
+    width: 48,
+    height: 48,
+    borderRadius: 14,
+    backgroundColor: 'rgba(233,69,96,0.12)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(233,69,96,0.2)',
   },
-  sellerBtnTitle: {
-    color: '#fff',
-    fontSize: 16,
+  sellerCardIcon: {
+    fontSize: 24,
+  },
+  sellerCardContent: {
+    flex: 1,
+  },
+  sellerCardTitle: {
+    color: '#f1f1f1',
+    fontSize: 15,
     fontWeight: '700',
     marginBottom: 2,
   },
-  sellerBtnSubtitle: {
-    color: '#888',
+  sellerCardSubtitle: {
+    color: '#a0a0b8',
     fontSize: 12,
   },
-  actionBtn: {
-    backgroundColor: '#16213e',
-    borderRadius: 12,
-    padding: 16,
-    flexDirection: 'row',
+  sellerCardArrow: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: 'rgba(233,69,96,0.1)',
+    justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 10,
-    borderWidth: 1,
-    borderColor: '#0f3460',
   },
-  actionBtnIcon: {
-    fontSize: 20,
-    marginRight: 12,
-  },
-  actionBtnText: {
-    flex: 1,
-    color: '#fff',
-    fontSize: 15,
-    fontWeight: '500',
-  },
-  actionBtnArrow: {
-    color: '#555',
-    fontSize: 22,
-  },
-  section: {
-    marginBottom: 16,
-  },
-  sectionTitle: {
-    color: '#555',
-    fontSize: 11,
+
+  // Section label
+  sectionLabel: {
+    color: '#4a4a6a',
+    fontSize: 10,
     fontWeight: '700',
     textTransform: 'uppercase',
-    letterSpacing: 1,
+    letterSpacing: 1.2,
+    marginHorizontal: 20,
     marginBottom: 8,
-    marginLeft: 4,
+    marginTop: 4,
   },
-  settingRow: {
-    backgroundColor: '#16213e',
-    borderRadius: 12,
-    padding: 14,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 8,
+
+  // Menu
+  menuSection: {
+    marginHorizontal: 16,
+    marginBottom: 20,
+    backgroundColor: '#13131f',
+    borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#0f3460',
+    borderColor: '#252538',
+    overflow: 'hidden',
   },
-  settingLeft: {
+  menuRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    padding: 14,
     gap: 12,
+  },
+  menuRowDisabled: {
+    opacity: 0.6,
+  },
+  menuDivider: {
+    height: 1,
+    backgroundColor: '#252538',
+    marginLeft: 58,
+  },
+  menuIconWrap: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  menuContent: {
     flex: 1,
   },
-  settingIcon: {
-    fontSize: 20,
-  },
-  settingLabel: {
-    color: '#fff',
-    fontSize: 14,
+  menuLabel: {
+    color: '#f1f1f1',
+    fontSize: 15,
     fontWeight: '500',
-    marginBottom: 2,
+    marginBottom: 1,
   },
-  settingSubtext: {
-    color: '#666',
+  menuSubtext: {
+    color: '#4a4a6a',
     fontSize: 11,
   },
-  linkRow: {
-    backgroundColor: '#16213e',
-    borderRadius: 12,
-    padding: 14,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 8,
+  comingSoonBadge: {
+    backgroundColor: '#1c1c2e',
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
     borderWidth: 1,
-    borderColor: '#0f3460',
+    borderColor: '#252538',
   },
-  linkText: {
-    color: '#fff',
-    fontSize: 14,
+  comingSoonText: {
+    color: '#4a4a6a',
+    fontSize: 11,
+    fontWeight: '600',
   },
+
+  // Sign out
   signOutBtn: {
-    backgroundColor: 'rgba(233,69,96,0.1)',
-    borderWidth: 1,
-    borderColor: '#e94560',
+    marginHorizontal: 16,
     borderRadius: 12,
-    padding: 16,
+    padding: 15,
     alignItems: 'center',
-    marginTop: 8,
-    marginBottom: 16,
+    borderWidth: 1.5,
+    borderColor: '#e94560',
+    marginTop: 4,
+    marginBottom: 20,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: 'rgba(233,69,96,0.06)',
   },
   signOutText: {
     color: '#e94560',
     fontWeight: '700',
-    fontSize: 16,
+    fontSize: 15,
   },
   version: {
-    color: '#333',
+    color: '#252538',
     fontSize: 12,
     textAlign: 'center',
+    marginBottom: 8,
   },
   btnDisabled: {
     opacity: 0.5,
   },
+
+  // Modal
   modal: {
     flex: 1,
-    backgroundColor: '#1a1a2e',
+    backgroundColor: '#0d0d14',
   },
   modalHeader: {
     flexDirection: 'row',
@@ -559,17 +708,25 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#16213e',
+    borderBottomColor: '#252538',
     paddingTop: 60,
+    backgroundColor: '#13131f',
+  },
+  modalCancelBtn: {
+    paddingHorizontal: 4,
+  },
+  modalSaveBtn: {
+    paddingHorizontal: 4,
   },
   modalTitle: {
-    color: '#fff',
+    color: '#f1f1f1',
     fontSize: 17,
     fontWeight: '700',
   },
   modalCancel: {
-    color: '#888',
+    color: '#a0a0b8',
     fontSize: 16,
+    fontWeight: '500',
   },
   modalSave: {
     color: '#e94560',
@@ -582,21 +739,21 @@ const styles = StyleSheet.create({
   field: {
     marginBottom: 20,
   },
-  label: {
-    color: '#aaa',
-    fontSize: 12,
-    fontWeight: '600',
+  fieldLabel: {
+    color: '#a0a0b8',
+    fontSize: 11,
+    fontWeight: '700',
     marginBottom: 8,
     textTransform: 'uppercase',
-    letterSpacing: 0.5,
+    letterSpacing: 0.8,
   },
-  input: {
-    backgroundColor: '#16213e',
-    borderRadius: 10,
-    padding: 13,
-    color: '#fff',
+  modalInput: {
+    backgroundColor: '#13131f',
+    borderRadius: 12,
+    padding: 14,
+    color: '#f1f1f1',
     fontSize: 15,
     borderWidth: 1,
-    borderColor: '#0f3460',
+    borderColor: '#252538',
   },
 });
