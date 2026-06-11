@@ -17,7 +17,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import api from '../../lib/api';
-import AIEstimateCard from '../../components/AIEstimateCard';
+import AIEstimateCard, { AIEstimate } from '../../components/AIEstimateCard';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -55,8 +55,14 @@ export default function SellScreen() {
 
   // AI estimate state
   const [aiLoading, setAiLoading] = useState(false);
-  const [aiEstimate, setAiEstimate] = useState<any>(null);
+  const [aiEstimate, setAiEstimate] = useState<AIEstimate | null>(null);
   const [aiError, setAiError] = useState('');
+
+  // Qualifying questions for AI
+  const [originalPrice, setOriginalPrice] = useState('');
+  const [q1Defects, setQ1Defects] = useState('');
+  const [q2Accessories, setQ2Accessories] = useState('');
+  const [q3Reason, setQ3Reason] = useState('');
 
   // Step 2: Item details
   const [title, setTitle] = useState('');
@@ -178,8 +184,12 @@ export default function SellScreen() {
       formData.append('age_years', '1');
       formData.append('category', category || 'Other');
       if (description) formData.append('description', description);
+      if (originalPrice) formData.append('original_price', originalPrice);
+      if (q1Defects) formData.append('q1_defects', q1Defects);
+      if (q2Accessories) formData.append('q2_accessories', q2Accessories);
+      if (q3Reason) formData.append('q3_reason', q3Reason);
 
-      const data = await api.postFormData<{ estimate: any }>('/ai/estimate', formData);
+      const data = await api.postFormData<{ estimate: AIEstimate }>('/ai/estimate', formData);
       setAiEstimate(data.estimate);
     } catch (err: any) {
       setAiError(err.message || 'AI estimate failed');
@@ -214,9 +224,10 @@ export default function SellScreen() {
 
   function useSuggestedPrices() {
     if (!aiEstimate) return;
-    setStartingPrice(String(aiEstimate.suggested_starting_price || ''));
-    setBuyNowPrice(String(aiEstimate.suggested_buy_now_price || ''));
-    setUseBuyNow(true);
+    const sp = aiEstimate.sell_price_range?.low || aiEstimate.suggested_starting_price;
+    const bn = aiEstimate.sell_price_range?.high || aiEstimate.suggested_buy_now_price;
+    if (sp) setStartingPrice(String(Math.round(sp)));
+    if (bn) { setBuyNowPrice(String(Math.round(bn))); setUseBuyNow(true); }
   }
 
   async function handleSubmit() {
@@ -400,6 +411,59 @@ export default function SellScreen() {
             </View>
           </View>
 
+          {/* Qualifying questions */}
+          <View style={styles.qualifySection}>
+            <Text style={styles.qualifyTitle}>3 Quick Questions → Better Estimate</Text>
+
+            <View style={styles.qualifyField}>
+              <Text style={styles.qualifyLabel}>💰 What did you originally pay? (R)</Text>
+              <View style={styles.qualifyPriceRow}>
+                <Text style={styles.qualifyCurrency}>R</Text>
+                <TextInput
+                  style={styles.qualifyPriceInput}
+                  value={originalPrice}
+                  onChangeText={setOriginalPrice}
+                  keyboardType="decimal-pad"
+                  placeholder="0"
+                  placeholderTextColor="#4a4a6a"
+                />
+              </View>
+            </View>
+
+            <View style={styles.qualifyField}>
+              <Text style={styles.qualifyLabel}>🔧 Any defects or repairs needed?</Text>
+              <TextInput
+                style={styles.qualifyInput}
+                value={q1Defects}
+                onChangeText={setQ1Defects}
+                placeholder="e.g. Minor scratch on lid, fully functional"
+                placeholderTextColor="#4a4a6a"
+              />
+            </View>
+
+            <View style={styles.qualifyField}>
+              <Text style={styles.qualifyLabel}>📦 Original packaging or accessories?</Text>
+              <TextInput
+                style={styles.qualifyInput}
+                value={q2Accessories}
+                onChangeText={setQ2Accessories}
+                placeholder="e.g. Yes, box and charger included"
+                placeholderTextColor="#4a4a6a"
+              />
+            </View>
+
+            <View style={[styles.qualifyField, { marginBottom: 0 }]}>
+              <Text style={styles.qualifyLabel}>🤔 Why are you selling?</Text>
+              <TextInput
+                style={styles.qualifyInput}
+                value={q3Reason}
+                onChangeText={setQ3Reason}
+                placeholder="e.g. Upgrading to newer model"
+                placeholderTextColor="#4a4a6a"
+              />
+            </View>
+          </View>
+
           <View style={styles.aiButtons}>
             <TouchableOpacity
               style={[styles.aiBtn, aiLoading && styles.btnDisabled]}
@@ -573,7 +637,7 @@ export default function SellScreen() {
         <Text style={styles.label}>Starting Price *</Text>
         <View style={styles.largePriceRow}>
           <View style={styles.currencyBadge}>
-            <Text style={styles.currencyBadgeText}>$</Text>
+            <Text style={styles.currencyBadgeText}>R</Text>
           </View>
           <TextInput
             style={styles.largePriceInput}
@@ -584,10 +648,12 @@ export default function SellScreen() {
             placeholderTextColor="#252538"
           />
         </View>
-        {aiEstimate?.suggested_starting_price && (
+        {aiEstimate?.sell_price_range?.low != null && (
           <View style={styles.aiHint}>
             <Ionicons name="flash-outline" size={12} color="#f97316" />
-            <Text style={styles.aiHintText}>AI suggests: ${aiEstimate.suggested_starting_price}</Text>
+            <Text style={styles.aiHintText}>
+              AI suggests: R{Math.round(aiEstimate.sell_price_range.low).toLocaleString('en-ZA')} – R{Math.round(aiEstimate.sell_price_range.high).toLocaleString('en-ZA')}
+            </Text>
           </View>
         )}
       </View>
@@ -612,7 +678,7 @@ export default function SellScreen() {
         </View>
         {useReserve && (
           <View style={styles.priceInputRow}>
-            <Text style={styles.currencySymbol}>$</Text>
+            <Text style={styles.currencySymbol}>R</Text>
             <TextInput
               style={[styles.input, styles.priceInput]}
               value={reservePrice}
@@ -645,7 +711,7 @@ export default function SellScreen() {
         </View>
         {useBuyNow && (
           <View style={styles.priceInputRow}>
-            <Text style={styles.currencySymbol}>$</Text>
+            <Text style={styles.currencySymbol}>R</Text>
             <TextInput
               style={[styles.input, styles.priceInput]}
               value={buyNowPrice}
@@ -739,18 +805,18 @@ export default function SellScreen() {
           <Text style={styles.reviewSectionTitle}>Pricing</Text>
           <View style={styles.reviewRow}>
             <Text style={styles.reviewKey}>Starting Price</Text>
-            <Text style={styles.reviewVal}>${parseFloat(startingPrice || '0').toFixed(2)}</Text>
+            <Text style={styles.reviewVal}>R{parseFloat(startingPrice || '0').toFixed(2)}</Text>
           </View>
           {useReserve && reservePrice && (
             <View style={styles.reviewRow}>
               <Text style={styles.reviewKey}>Reserve Price</Text>
-              <Text style={styles.reviewVal}>${parseFloat(reservePrice).toFixed(2)}</Text>
+              <Text style={styles.reviewVal}>R{parseFloat(reservePrice).toFixed(2)}</Text>
             </View>
           )}
           {useBuyNow && buyNowPrice && (
             <View style={styles.reviewRow}>
               <Text style={styles.reviewKey}>Buy Now Price</Text>
-              <Text style={[styles.reviewVal, { color: '#f59e0b' }]}>${parseFloat(buyNowPrice).toFixed(2)}</Text>
+              <Text style={[styles.reviewVal, { color: '#f59e0b' }]}>R{parseFloat(buyNowPrice).toFixed(2)}</Text>
             </View>
           )}
           <View style={styles.reviewRow}>
@@ -763,7 +829,7 @@ export default function SellScreen() {
           <View style={styles.reviewCard}>
             <Text style={styles.reviewSectionTitle}>AI Estimate</Text>
             <Text style={styles.reviewAiVal}>
-              ${aiEstimate.estimated_market_value_low} – ${aiEstimate.estimated_market_value_high}
+              R{Math.round(aiEstimate.sell_price_range?.low || aiEstimate.estimated_market_value_low || 0).toLocaleString('en-ZA')} – R{Math.round(aiEstimate.sell_price_range?.high || aiEstimate.estimated_market_value_high || 0).toLocaleString('en-ZA')}
             </Text>
           </View>
         )}
@@ -1667,5 +1733,68 @@ const styles = StyleSheet.create({
     color: '#a0a0b8',
     fontSize: 16,
     fontWeight: '600',
+  },
+  qualifySection: {
+    backgroundColor: '#0d0d14',
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(249,115,22,0.15)',
+    gap: 10,
+  },
+  qualifyTitle: {
+    color: '#f97316',
+    fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
+    marginBottom: 2,
+  },
+  qualifyField: {
+    marginBottom: 6,
+  },
+  qualifyLabel: {
+    color: '#a0a0b8',
+    fontSize: 12,
+    fontWeight: '600',
+    marginBottom: 6,
+  },
+  qualifyInput: {
+    backgroundColor: '#13131f',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    color: '#f1f1f1',
+    fontSize: 13,
+    borderWidth: 1,
+    borderColor: '#252538',
+  },
+  qualifyPriceRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#13131f',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#252538',
+    overflow: 'hidden',
+  },
+  qualifyCurrency: {
+    color: '#f1f1f1',
+    fontSize: 16,
+    fontWeight: '800',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    backgroundColor: '#1c1c2e',
+    borderRightWidth: 1,
+    borderRightColor: '#252538',
+  },
+  qualifyPriceInput: {
+    flex: 1,
+    color: '#f1f1f1',
+    fontSize: 16,
+    fontWeight: '700',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
   },
 });
