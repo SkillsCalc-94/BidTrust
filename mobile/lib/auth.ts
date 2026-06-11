@@ -116,9 +116,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setSession(data.session);
       setUser(data.user);
       if (data.user) await fetchProfile(data.user.id);
-    } else {
-      // Email confirmation required — sign in manually
-      await signIn(email, password);
+    } else if (data.user) {
+      // Email confirmation may be required — attempt silent sign in
+      try {
+        await signIn(email, password);
+      } catch (signInErr: any) {
+        // If sign in fails (e.g., email confirmation required), surface a helpful message
+        throw new Error('Account created! Please check your email to confirm your account, then sign in.');
+      }
     }
   }
 

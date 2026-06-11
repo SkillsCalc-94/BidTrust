@@ -10,7 +10,7 @@ import {
   ScrollView,
   ActivityIndicator,
 } from 'react-native';
-import { Link, router } from 'expo-router';
+import { router } from 'expo-router';
 import { useAuth } from '../../lib/auth';
 
 export default function RegisterScreen() {
@@ -22,6 +22,7 @@ export default function RegisterScreen() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
+  const [successMessage, setSuccessMessage] = useState('');
 
   async function handleRegister() {
     if (!fullName.trim() || !email.trim() || !password || !confirmPassword) {
@@ -42,9 +43,21 @@ export default function RegisterScreen() {
 
     try {
       await signUp(email.trim().toLowerCase(), password, fullName.trim());
+      // signUp resolved without error — session established, navigate to app
       router.replace('/(tabs)');
     } catch (err: any) {
-      setError(err.message || 'Registration failed. Please try again.');
+      const msg: string = err.message || 'Registration failed. Please try again.';
+      // Detect email-confirmation-required scenario (not a real error)
+      if (
+        msg.toLowerCase().includes('confirm') ||
+        msg.toLowerCase().includes('check your email') ||
+        msg.toLowerCase().includes('verification')
+      ) {
+        setSuccess(true);
+        setSuccessMessage(msg);
+      } else {
+        setError(msg);
+      }
     } finally {
       setLoading(false);
     }
@@ -70,6 +83,18 @@ export default function RegisterScreen() {
         <View style={styles.card}>
           <Text style={styles.cardTitle}>Sign Up</Text>
 
+          {success ? (
+            <View style={styles.successBox}>
+              <Text style={styles.successText}>✓ {successMessage || 'Account created successfully!'}</Text>
+              <TouchableOpacity
+                style={styles.button}
+                onPress={() => router.replace('/(auth)/login')}
+              >
+                <Text style={styles.buttonText}>Go to Sign In</Text>
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <>
           {error ? (
             <View style={styles.errorBox}>
               <Text style={styles.errorText}>{error}</Text>
@@ -151,11 +176,9 @@ export default function RegisterScreen() {
 
           <View style={styles.footer}>
             <Text style={styles.footerText}>Already have an account? </Text>
-            <Link href="/(auth)/login" asChild>
-              <TouchableOpacity>
-                <Text style={styles.footerLink}>Sign In</Text>
-              </TouchableOpacity>
-            </Link>
+            <TouchableOpacity onPress={() => router.push('/login')}>
+              <Text style={styles.footerLink}>Sign In</Text>
+            </TouchableOpacity>
           </View>
         </View>
       </ScrollView>

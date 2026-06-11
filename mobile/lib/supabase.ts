@@ -4,35 +4,46 @@ import { Platform } from 'react-native';
 const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL || 'https://placeholder.supabase.co';
 const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || 'placeholder-anon-key';
 
-// Use localStorage on web, AsyncStorage on native
-let storageAdapter: any;
-if (Platform.OS === 'web') {
-  storageAdapter = {
-    getItem: (key: string) => {
-      try {
+// Lazy storage adapter — defer window/localStorage access until runtime
+// to avoid SSR/build-time crashes when window is not defined.
+const storageAdapter = {
+  getItem: (key: string): Promise<string | null> => {
+    try {
+      if (Platform.OS === 'web') {
+        if (typeof window === 'undefined') return Promise.resolve(null);
         return Promise.resolve(window.localStorage.getItem(key));
-      } catch {
-        return Promise.resolve(null);
       }
-    },
-    setItem: (key: string, value: string) => {
-      try {
-        window.localStorage.setItem(key, value);
-      } catch {}
+      const AsyncStorage = require('@react-native-async-storage/async-storage').default;
+      return AsyncStorage.getItem(key);
+    } catch {
+      return Promise.resolve(null);
+    }
+  },
+  setItem: (key: string, value: string): Promise<void> => {
+    try {
+      if (Platform.OS === 'web') {
+        if (typeof window !== 'undefined') window.localStorage.setItem(key, value);
+        return Promise.resolve();
+      }
+      const AsyncStorage = require('@react-native-async-storage/async-storage').default;
+      return AsyncStorage.setItem(key, value);
+    } catch {
       return Promise.resolve();
-    },
-    removeItem: (key: string) => {
-      try {
-        window.localStorage.removeItem(key);
-      } catch {}
+    }
+  },
+  removeItem: (key: string): Promise<void> => {
+    try {
+      if (Platform.OS === 'web') {
+        if (typeof window !== 'undefined') window.localStorage.removeItem(key);
+        return Promise.resolve();
+      }
+      const AsyncStorage = require('@react-native-async-storage/async-storage').default;
+      return AsyncStorage.removeItem(key);
+    } catch {
       return Promise.resolve();
-    },
-  };
-} else {
-  // Lazy require to avoid importing AsyncStorage on web
-  const AsyncStorage = require('@react-native-async-storage/async-storage').default;
-  storageAdapter = AsyncStorage;
-}
+    }
+  },
+};
 
 const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {

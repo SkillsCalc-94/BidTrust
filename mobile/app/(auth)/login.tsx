@@ -111,11 +111,9 @@ export default function LoginScreen() {
 
           <View style={styles.footer}>
             <Text style={styles.footerText}>Don't have an account? </Text>
-            <Link href="/(auth)/register" asChild>
-              <TouchableOpacity>
-                <Text style={styles.footerLink}>Sign Up</Text>
-              </TouchableOpacity>
-            </Link>
+            <TouchableOpacity onPress={() => router.push('/register')}>
+              <Text style={styles.footerLink}>Sign Up</Text>
+            </TouchableOpacity>
           </View>
         </View>
       </ScrollView>
