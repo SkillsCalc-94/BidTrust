@@ -2,44 +2,57 @@ import { Platform } from 'react-native';
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3001/api';
 
+// Lazy import to avoid circular deps — auth.ts imports api.ts
+function getSupabase() {
+  return require('./supabase').default;
+}
+
 async function getAuthHeader(): Promise<Record<string, string>> {
   try {
-    if (Platform.OS === 'web') {
-      // On web, Supabase stores session in localStorage
-      const keys = Object.keys(window.localStorage);
-      const supabaseKey = keys.find((k) => k.includes('supabase') && k.includes('auth'));
-      if (supabaseKey) {
-        const raw = window.localStorage.getItem(supabaseKey);
-        if (raw) {
-          const parsed = JSON.parse(raw);
-          const token =
-            parsed?.access_token ||
-            parsed?.currentSession?.access_token ||
-            parsed?.session?.access_token;
-          if (token) {
-            return { Authorization: `Bearer ${token}` };
-          }
-        }
-      }
-    } else {
-      const AsyncStorage = require('@react-native-async-storage/async-storage').default;
-      const keys = await AsyncStorage.getAllKeys();
-      const supabaseKey = keys.find((k: string) => k.includes('supabase') && k.includes('auth'));
-      if (supabaseKey) {
-        const raw = await AsyncStorage.getItem(supabaseKey);
-        if (raw) {
-          const parsed = JSON.parse(raw);
-          const token =
-            parsed?.access_token ||
-            parsed?.currentSession?.access_token ||
-            parsed?.session?.access_token;
-          if (token) {
-            return { Authorization: `Bearer ${token}` };
-          }
-        }
-      }
+    // Use supabase client directly to get the session token — most reliable approach
+    const supabase = getSupabase();
+    const { data } = await supabase.auth.getSession();
+    const token = data?.session?.access_token;
+    if (token) {
+      return { Authorization: `Bearer ${token}` };
     }
-  } catch (_) {}
+  } catch (_) {
+    // Fallback: parse storage manually
+    try {
+      if (Platform.OS === 'web') {
+        const keys = Object.keys(window.localStorage);
+        const supabaseKey =
+          keys.find((k) => k.startsWith('sb-') && k.endsWith('-auth-token')) ||
+          keys.find((k) => k.includes('supabase') && k.includes('auth'));
+        if (supabaseKey) {
+          const raw = window.localStorage.getItem(supabaseKey);
+          if (raw) {
+            const parsed = JSON.parse(raw);
+            const token =
+              parsed?.access_token ||
+              parsed?.currentSession?.access_token ||
+              parsed?.session?.access_token;
+            if (token) return { Authorization: `Bearer ${token}` };
+          }
+        }
+      } else {
+        const AsyncStorage = require('@react-native-async-storage/async-storage').default;
+        const keys = await AsyncStorage.getAllKeys();
+        const supabaseKey = keys.find((k: string) => k.includes('supabase') && k.includes('auth'));
+        if (supabaseKey) {
+          const raw = await AsyncStorage.getItem(supabaseKey);
+          if (raw) {
+            const parsed = JSON.parse(raw);
+            const token =
+              parsed?.access_token ||
+              parsed?.currentSession?.access_token ||
+              parsed?.session?.access_token;
+            if (token) return { Authorization: `Bearer ${token}` };
+          }
+        }
+      }
+    } catch (_2) {}
+  }
   return {};
 }
 

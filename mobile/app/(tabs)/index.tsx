@@ -167,11 +167,11 @@ export default function HomeScreen() {
         </View>
       ) : null}
 
-      {!loading && listings.length === 0 && (
+      {!loading && listings.length === 0 && !error && (
         <View style={styles.emptyContainer}>
           <Text style={styles.emptyIcon}>🔍</Text>
-          <Text style={styles.emptyTitle}>No listings found</Text>
-          <Text style={styles.emptySubtitle}>Try adjusting your search or filters</Text>
+          <Text style={styles.emptyTitle}>No listings yet</Text>
+          <Text style={styles.emptySubtitle}>Be the first to list an item for sale!</Text>
         </View>
       )}
     </View>

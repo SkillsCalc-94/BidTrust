@@ -90,7 +90,6 @@ const styles = StyleSheet.create({
     color: '#aaaaaa',
     fontSize: 13,
     fontWeight: '600',
-    fontVariant: ['tabular-nums'],
   },
   compact: {
     fontSize: 11,

@@ -1,7 +1,6 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { Session, User } from '@supabase/supabase-js';
 import supabase from './supabase';
-import api from './api';
 
 export interface Profile {
   id: string;
@@ -45,33 +44,35 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
 
-  async function fetchProfile() {
+  async function fetchProfile(userId: string) {
     try {
-      const data = await api.get<{ profile: Profile }>('/auth/profile');
-      setProfile(data.profile);
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', userId)
+        .single();
+      if (!error && data) setProfile(data as Profile);
     } catch (err) {
       console.warn('Failed to fetch profile:', err);
     }
   }
 
   useEffect(() => {
-    // Get initial session
     supabase.auth.getSession().then(({ data: { session: s } }) => {
       setSession(s);
       setUser(s?.user ?? null);
       if (s?.user) {
-        fetchProfile().finally(() => setLoading(false));
+        fetchProfile(s.user.id).finally(() => setLoading(false));
       } else {
         setLoading(false);
       }
     });
 
-    // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, s) => {
       setSession(s);
       setUser(s?.user ?? null);
       if (s?.user) {
-        fetchProfile();
+        fetchProfile(s.user.id);
       } else {
         setProfile(null);
       }
@@ -82,20 +83,43 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   async function signIn(email: string, password: string) {
     const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) throw error;
+    if (error) throw new Error(error.message);
     setSession(data.session);
     setUser(data.user);
-    await fetchProfile();
+    await fetchProfile(data.user.id);
   }
 
   async function signUp(email: string, password: string, fullName: string) {
-    const data = await api.post('/auth/register', {
+    const { data, error } = await supabase.auth.signUp({
       email,
       password,
-      full_name: fullName,
+      options: { data: { full_name: fullName } },
     });
-    // After registration, sign in automatically
-    await signIn(email, password);
+    if (error) throw new Error(error.message);
+
+    // Create profile row directly
+    if (data.user) {
+      const { error: profileError } = await supabase.from('profiles').upsert({
+        id: data.user.id,
+        email: email.toLowerCase(),
+        full_name: fullName,
+        role: 'buyer',
+        seller_verified: false,
+        total_sales: 0,
+        total_purchases: 0,
+      });
+      if (profileError) console.warn('Profile creation error:', profileError.message);
+    }
+
+    // Auto sign in after registration
+    if (data.session) {
+      setSession(data.session);
+      setUser(data.user);
+      if (data.user) await fetchProfile(data.user.id);
+    } else {
+      // Email confirmation required — sign in manually
+      await signIn(email, password);
+    }
   }
 
   async function signOut() {
@@ -106,23 +130,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }
 
   async function refreshProfile() {
-    await fetchProfile();
+    if (user) await fetchProfile(user.id);
   }
 
   return React.createElement(
     AuthContext.Provider,
-    {
-      value: {
-        user,
-        profile,
-        session,
-        loading,
-        signIn,
-        signUp,
-        signOut,
-        refreshProfile,
-      },
-    },
+    { value: { user, profile, session, loading, signIn, signUp, signOut, refreshProfile } },
     children
   );
 }
