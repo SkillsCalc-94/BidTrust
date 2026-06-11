@@ -11,19 +11,40 @@ import {
   Alert,
   Platform,
   Switch,
+  Dimensions,
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { router } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
 import api from '../../lib/api';
-import AIEstimateCard from '../../components/AIEstimateCard';
+import AIEstimateCard, { AIEstimate } from '../../components/AIEstimateCard';
 
-const CATEGORIES = ['Electronics', 'Furniture', 'Clothing', 'Vehicles', 'Collectibles', 'Sports', 'Books', 'Other'];
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
+
+const CATEGORIES = [
+  { label: 'Electronics', emoji: '📱' },
+  { label: 'Furniture', emoji: '🛋️' },
+  { label: 'Clothing', emoji: '👕' },
+  { label: 'Vehicles', emoji: '🚗' },
+  { label: 'Collectibles', emoji: '💎' },
+  { label: 'Sports', emoji: '⚽' },
+  { label: 'Books', emoji: '📚' },
+  { label: 'Other', emoji: '📦' },
+];
+
 const CONDITIONS = [
-  { value: 'new', label: 'New', desc: 'Brand new, never used, in original packaging' },
-  { value: 'like_new', label: 'Like New', desc: 'Used once or twice, no signs of wear' },
-  { value: 'good', label: 'Good', desc: 'Light use, minor wear, fully functional' },
-  { value: 'fair', label: 'Fair', desc: 'Moderate use, visible wear, functional' },
-  { value: 'poor', label: 'Poor', desc: 'Heavy wear, may have defects' },
+  { value: 'new', label: 'New', emoji: '🆕', desc: 'Brand new, never used, in original packaging' },
+  { value: 'like_new', label: 'Like New', emoji: '✨', desc: 'Used once or twice, no signs of wear' },
+  { value: 'good', label: 'Good', emoji: '👍', desc: 'Light use, minor wear, fully functional' },
+  { value: 'fair', label: 'Fair', emoji: '🤝', desc: 'Moderate use, visible wear, functional' },
+  { value: 'poor', label: 'Poor', emoji: '🔧', desc: 'Heavy wear, may have defects' },
+];
+
+const DURATION_OPTIONS = [
+  { label: '1d', days: '1' },
+  { label: '3d', days: '3' },
+  { label: '7d', days: '7' },
+  { label: '14d', days: '14' },
 ];
 
 export default function SellScreen() {
@@ -34,8 +55,14 @@ export default function SellScreen() {
 
   // AI estimate state
   const [aiLoading, setAiLoading] = useState(false);
-  const [aiEstimate, setAiEstimate] = useState<any>(null);
+  const [aiEstimate, setAiEstimate] = useState<AIEstimate | null>(null);
   const [aiError, setAiError] = useState('');
+
+  // Qualifying questions for AI
+  const [originalPrice, setOriginalPrice] = useState('');
+  const [q1Defects, setQ1Defects] = useState('');
+  const [q2Accessories, setQ2Accessories] = useState('');
+  const [q3Reason, setQ3Reason] = useState('');
 
   // Step 2: Item details
   const [title, setTitle] = useState('');
@@ -59,7 +86,6 @@ export default function SellScreen() {
 
   async function pickImages() {
     if (Platform.OS === 'web') {
-      // Web: use file input
       return new Promise<void>((resolve) => {
         const input = document.createElement('input');
         input.type = 'file';
@@ -103,7 +129,6 @@ export default function SellScreen() {
 
   async function takePhoto() {
     if (Platform.OS === 'web') {
-      // On web, reuse file picker for camera capture
       return new Promise<void>((resolve) => {
         const input = document.createElement('input');
         input.type = 'file';
@@ -159,8 +184,12 @@ export default function SellScreen() {
       formData.append('age_years', '1');
       formData.append('category', category || 'Other');
       if (description) formData.append('description', description);
+      if (originalPrice) formData.append('original_price', originalPrice);
+      if (q1Defects) formData.append('q1_defects', q1Defects);
+      if (q2Accessories) formData.append('q2_accessories', q2Accessories);
+      if (q3Reason) formData.append('q3_reason', q3Reason);
 
-      const data = await api.postFormData<{ estimate: any }>('/ai/estimate', formData);
+      const data = await api.postFormData<{ estimate: AIEstimate }>('/ai/estimate', formData);
       setAiEstimate(data.estimate);
     } catch (err: any) {
       setAiError(err.message || 'AI estimate failed');
@@ -195,9 +224,10 @@ export default function SellScreen() {
 
   function useSuggestedPrices() {
     if (!aiEstimate) return;
-    setStartingPrice(String(aiEstimate.suggested_starting_price || ''));
-    setBuyNowPrice(String(aiEstimate.suggested_buy_now_price || ''));
-    setUseBuyNow(true);
+    const sp = aiEstimate.sell_price_range?.low || aiEstimate.suggested_starting_price;
+    const bn = aiEstimate.sell_price_range?.high || aiEstimate.suggested_buy_now_price;
+    if (sp) setStartingPrice(String(Math.round(sp)));
+    if (bn) { setBuyNowPrice(String(Math.round(bn))); setUseBuyNow(true); }
   }
 
   async function handleSubmit() {
@@ -268,27 +298,52 @@ export default function SellScreen() {
     setCreatedListingId(null);
   }
 
-  // Progress bar
+  // Premium progress bar
   const renderProgressBar = () => {
     if (step > 4) return null;
-    const steps = ['Photos', 'Details', 'Pricing', 'Review'];
+    const steps = [
+      { label: 'Photos', icon: 'camera' },
+      { label: 'Details', icon: 'create' },
+      { label: 'Pricing', icon: 'pricetag' },
+      { label: 'Review', icon: 'checkmark-circle' },
+    ];
     return (
       <View style={styles.progressContainer}>
-        {steps.map((label, i) => (
-          <React.Fragment key={i}>
-            <View style={styles.progressStep}>
-              <View style={[styles.progressDot, i + 1 <= step && styles.progressDotActive]}>
-                <Text style={[styles.progressDotText, i + 1 <= step && styles.progressDotTextActive]}>
-                  {i + 1}
+        {steps.map((s, i) => {
+          const isDone = i + 1 < step;
+          const isActive = i + 1 === step;
+          return (
+            <React.Fragment key={i}>
+              <View style={styles.progressStep}>
+                <View style={[
+                  styles.progressDot,
+                  isDone && styles.progressDotDone,
+                  isActive && styles.progressDotActive,
+                ]}>
+                  {isDone ? (
+                    <Ionicons name="checkmark" size={13} color="#fff" />
+                  ) : (
+                    <Ionicons
+                      name={s.icon as any}
+                      size={12}
+                      color={isActive ? '#fff' : '#4a4a6a'}
+                    />
+                  )}
+                </View>
+                <Text style={[
+                  styles.progressLabel,
+                  isActive && styles.progressLabelActive,
+                  isDone && styles.progressLabelDone,
+                ]}>
+                  {s.label}
                 </Text>
               </View>
-              <Text style={[styles.progressLabel, i + 1 === step && styles.progressLabelActive]}>
-                {label}
-              </Text>
-            </View>
-            {i < 3 && <View style={[styles.progressLine, i + 1 < step && styles.progressLineActive]} />}
-          </React.Fragment>
-        ))}
+              {i < 3 && (
+                <View style={[styles.progressLine, (i + 1 < step) && styles.progressLineActive]} />
+              )}
+            </React.Fragment>
+          );
+        })}
       </View>
     );
   };
@@ -299,41 +354,114 @@ export default function SellScreen() {
       <Text style={styles.stepTitle}>Add Photos</Text>
       <Text style={styles.stepSubtitle}>Up to 10 photos. First photo is the cover.</Text>
 
-      {/* Photo grid */}
-      <View style={styles.photoGrid}>
-        {photos.map((uri, i) => (
-          <View key={i} style={styles.photoWrapper}>
-            <Image source={{ uri }} style={styles.photoThumb} />
-            {i === 0 && <View style={styles.primaryBadge}><Text style={styles.primaryBadgeText}>Cover</Text></View>}
-            <TouchableOpacity style={styles.removePhotoBtn} onPress={() => removePhoto(i)}>
-              <Text style={styles.removePhotoBtnText}>✕</Text>
-            </TouchableOpacity>
+      {/* Upload zone */}
+      {photos.length === 0 ? (
+        <TouchableOpacity style={styles.uploadZone} onPress={pickImages}>
+          <View style={styles.uploadIconWrap}>
+            <Ionicons name="camera-outline" size={36} color="#e94560" />
           </View>
-        ))}
-
-        {photos.length < 10 && (
-          <TouchableOpacity style={styles.addPhotoBtn} onPress={pickImages}>
-            <Text style={styles.addPhotoBtnIcon}>+</Text>
-            <Text style={styles.addPhotoBtnText}>Add</Text>
-          </TouchableOpacity>
-        )}
-      </View>
+          <Text style={styles.uploadZoneTitle}>Tap to add photos</Text>
+          <Text style={styles.uploadZoneSubtitle}>or drag & drop — max 10 images</Text>
+        </TouchableOpacity>
+      ) : (
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.photoStrip} contentContainerStyle={styles.photoStripContent}>
+          {photos.map((uri, i) => (
+            <View key={i} style={styles.photoWrapper}>
+              <Image source={{ uri }} style={styles.photoThumb} />
+              {i === 0 && (
+                <View style={styles.primaryBadge}>
+                  <Text style={styles.primaryBadgeText}>PRIMARY</Text>
+                </View>
+              )}
+              <TouchableOpacity style={styles.removePhotoBtn} onPress={() => removePhoto(i)}>
+                <Ionicons name="close" size={10} color="#fff" />
+              </TouchableOpacity>
+            </View>
+          ))}
+          {photos.length < 10 && (
+            <TouchableOpacity style={styles.addMoreBtn} onPress={pickImages}>
+              <Ionicons name="add" size={28} color="#4a4a6a" />
+              <Text style={styles.addMoreText}>Add</Text>
+            </TouchableOpacity>
+          )}
+        </ScrollView>
+      )}
 
       <View style={styles.photoActions}>
         <TouchableOpacity style={styles.photoActionBtn} onPress={pickImages}>
-          <Text style={styles.photoActionBtnText}>📷 Library</Text>
+          <Ionicons name="images-outline" size={18} color="#a0a0b8" />
+          <Text style={styles.photoActionBtnText}>Library</Text>
         </TouchableOpacity>
         <TouchableOpacity style={styles.photoActionBtn} onPress={takePhoto}>
-          <Text style={styles.photoActionBtnText}>📸 Camera</Text>
+          <Ionicons name="camera-outline" size={18} color="#a0a0b8" />
+          <Text style={styles.photoActionBtnText}>Camera</Text>
         </TouchableOpacity>
       </View>
 
       {/* AI Section */}
       {photos.length > 0 && (
         <View style={styles.aiSection}>
-          <View style={styles.aiHeader}>
-            <Text style={styles.aiTitle}>✨ AI Valuation</Text>
-            <Text style={styles.aiSubtitle}>Let AI estimate your item's market value</Text>
+          <View style={styles.aiSectionHeader}>
+            <View style={styles.aiIconBadge}>
+              <Text style={styles.aiIconBadgeText}>AI</Text>
+            </View>
+            <View style={styles.aiHeaderText}>
+              <Text style={styles.aiTitle}>✨ AI Estimate</Text>
+              <Text style={styles.aiSubtitle}>Instant market value from your photos</Text>
+            </View>
+          </View>
+
+          {/* Qualifying questions */}
+          <View style={styles.qualifySection}>
+            <Text style={styles.qualifyTitle}>3 Quick Questions → Better Estimate</Text>
+
+            <View style={styles.qualifyField}>
+              <Text style={styles.qualifyLabel}>💰 What did you originally pay? (R)</Text>
+              <View style={styles.qualifyPriceRow}>
+                <Text style={styles.qualifyCurrency}>R</Text>
+                <TextInput
+                  style={styles.qualifyPriceInput}
+                  value={originalPrice}
+                  onChangeText={setOriginalPrice}
+                  keyboardType="decimal-pad"
+                  placeholder="0"
+                  placeholderTextColor="#4a4a6a"
+                />
+              </View>
+            </View>
+
+            <View style={styles.qualifyField}>
+              <Text style={styles.qualifyLabel}>🔧 Any defects or repairs needed?</Text>
+              <TextInput
+                style={styles.qualifyInput}
+                value={q1Defects}
+                onChangeText={setQ1Defects}
+                placeholder="e.g. Minor scratch on lid, fully functional"
+                placeholderTextColor="#4a4a6a"
+              />
+            </View>
+
+            <View style={styles.qualifyField}>
+              <Text style={styles.qualifyLabel}>📦 Original packaging or accessories?</Text>
+              <TextInput
+                style={styles.qualifyInput}
+                value={q2Accessories}
+                onChangeText={setQ2Accessories}
+                placeholder="e.g. Yes, box and charger included"
+                placeholderTextColor="#4a4a6a"
+              />
+            </View>
+
+            <View style={[styles.qualifyField, { marginBottom: 0 }]}>
+              <Text style={styles.qualifyLabel}>🤔 Why are you selling?</Text>
+              <TextInput
+                style={styles.qualifyInput}
+                value={q3Reason}
+                onChangeText={setQ3Reason}
+                placeholder="e.g. Upgrading to newer model"
+                placeholderTextColor="#4a4a6a"
+              />
+            </View>
           </View>
 
           <View style={styles.aiButtons}>
@@ -345,7 +473,10 @@ export default function SellScreen() {
               {aiLoading ? (
                 <ActivityIndicator color="#fff" size="small" />
               ) : (
-                <Text style={styles.aiBtnText}>Get AI Estimate</Text>
+                <>
+                  <Ionicons name="flash" size={16} color="#fff" />
+                  <Text style={styles.aiBtnText}>Get AI Estimate</Text>
+                </>
               )}
             </TouchableOpacity>
 
@@ -354,17 +485,24 @@ export default function SellScreen() {
               onPress={runAIDescribe}
               disabled={aiLoading}
             >
+              <Ionicons name="sparkles-outline" size={16} color="#f97316" />
               <Text style={styles.aiDescribeBtnText}>Auto-fill Details</Text>
             </TouchableOpacity>
           </View>
 
-          {aiError ? <Text style={styles.aiError}>{aiError}</Text> : null}
+          {aiError ? (
+            <View style={styles.aiErrorBox}>
+              <Ionicons name="alert-circle-outline" size={14} color="#e94560" />
+              <Text style={styles.aiError}>{aiError}</Text>
+            </View>
+          ) : null}
 
           {aiEstimate && (
             <>
               <AIEstimateCard estimate={aiEstimate} />
               <TouchableOpacity style={styles.usePricesBtn} onPress={useSuggestedPrices}>
-                <Text style={styles.usePricesBtnText}>Use Suggested Prices →</Text>
+                <Ionicons name="arrow-forward-circle" size={16} color="#e94560" />
+                <Text style={styles.usePricesBtnText}>Use Suggested Prices</Text>
               </TouchableOpacity>
             </>
           )}
@@ -376,7 +514,8 @@ export default function SellScreen() {
         onPress={() => setStep(2)}
         disabled={photos.length === 0}
       >
-        <Text style={styles.nextBtnText}>Next: Item Details →</Text>
+        <Text style={styles.nextBtnText}>Next: Item Details</Text>
+        <Ionicons name="arrow-forward" size={18} color="#fff" />
       </TouchableOpacity>
     </View>
   );
@@ -385,6 +524,7 @@ export default function SellScreen() {
   const renderStep2 = () => (
     <View>
       <Text style={styles.stepTitle}>Item Details</Text>
+      <Text style={styles.stepSubtitle}>Tell buyers what you're selling.</Text>
 
       <View style={styles.field}>
         <Text style={styles.label}>Title *</Text>
@@ -393,7 +533,7 @@ export default function SellScreen() {
           value={title}
           onChangeText={setTitle}
           placeholder="e.g. Apple MacBook Pro 2021 M1"
-          placeholderTextColor="#666"
+          placeholderTextColor="#4a4a6a"
           maxLength={100}
         />
       </View>
@@ -405,7 +545,7 @@ export default function SellScreen() {
           value={description}
           onChangeText={setDescription}
           placeholder="Describe the item, its features, history..."
-          placeholderTextColor="#666"
+          placeholderTextColor="#4a4a6a"
           multiline
           numberOfLines={4}
           maxLength={2000}
@@ -414,15 +554,16 @@ export default function SellScreen() {
 
       <View style={styles.field}>
         <Text style={styles.label}>Category *</Text>
-        <View style={styles.optionGrid}>
+        <View style={styles.categoryGrid}>
           {CATEGORIES.map(cat => (
             <TouchableOpacity
-              key={cat}
-              style={[styles.optionBtn, category === cat && styles.optionBtnActive]}
-              onPress={() => setCategory(cat)}
+              key={cat.label}
+              style={[styles.categoryGridItem, category === cat.label && styles.categoryGridItemActive]}
+              onPress={() => setCategory(cat.label)}
             >
-              <Text style={[styles.optionBtnText, category === cat && styles.optionBtnTextActive]}>
-                {cat}
+              <Text style={styles.categoryGridEmoji}>{cat.emoji}</Text>
+              <Text style={[styles.categoryGridText, category === cat.label && styles.categoryGridTextActive]}>
+                {cat.label}
               </Text>
             </TouchableOpacity>
           ))}
@@ -431,44 +572,56 @@ export default function SellScreen() {
 
       <View style={styles.field}>
         <Text style={styles.label}>Condition *</Text>
-        {CONDITIONS.map(cond => (
-          <TouchableOpacity
-            key={cond.value}
-            style={[styles.conditionBtn, condition === cond.value && styles.conditionBtnActive]}
-            onPress={() => setCondition(cond.value)}
-          >
-            <View>
-              <Text style={[styles.conditionLabel, condition === cond.value && styles.conditionLabelActive]}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.conditionPillRow}>
+          {CONDITIONS.map(cond => (
+            <TouchableOpacity
+              key={cond.value}
+              style={[styles.conditionPill, condition === cond.value && styles.conditionPillActive]}
+              onPress={() => setCondition(cond.value)}
+            >
+              <Text style={styles.conditionPillEmoji}>{cond.emoji}</Text>
+              <Text style={[styles.conditionPillText, condition === cond.value && styles.conditionPillTextActive]}>
                 {cond.label}
               </Text>
-              <Text style={styles.conditionDesc}>{cond.desc}</Text>
-            </View>
-            {condition === cond.value && <Text style={styles.checkmark}>✓</Text>}
-          </TouchableOpacity>
-        ))}
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+        {condition && (
+          <View style={styles.conditionDesc}>
+            <Ionicons name="information-circle-outline" size={13} color="#a0a0b8" />
+            <Text style={styles.conditionDescText}>
+              {CONDITIONS.find(c => c.value === condition)?.desc}
+            </Text>
+          </View>
+        )}
       </View>
 
       <View style={styles.field}>
         <Text style={styles.label}>Location</Text>
-        <TextInput
-          style={styles.input}
-          value={location}
-          onChangeText={setLocation}
-          placeholder="City, State"
-          placeholderTextColor="#666"
-        />
+        <View style={styles.inputWithIcon}>
+          <Ionicons name="location-outline" size={16} color="#4a4a6a" style={{ marginRight: 8 }} />
+          <TextInput
+            style={styles.inputFlat}
+            value={location}
+            onChangeText={setLocation}
+            placeholder="City, State"
+            placeholderTextColor="#4a4a6a"
+          />
+        </View>
       </View>
 
       <View style={styles.navButtons}>
         <TouchableOpacity style={styles.backBtn} onPress={() => setStep(1)}>
-          <Text style={styles.backBtnText}>← Back</Text>
+          <Ionicons name="arrow-back" size={18} color="#a0a0b8" />
+          <Text style={styles.backBtnText}>Back</Text>
         </TouchableOpacity>
         <TouchableOpacity
           style={[styles.nextBtn, { flex: 1 }, (!title || !category || !condition) && styles.btnDisabled]}
           onPress={() => setStep(3)}
           disabled={!title || !category || !condition}
         >
-          <Text style={styles.nextBtnText}>Next: Pricing →</Text>
+          <Text style={styles.nextBtnText}>Next: Pricing</Text>
+          <Ionicons name="arrow-forward" size={18} color="#fff" />
         </TouchableOpacity>
       </View>
     </View>
@@ -478,73 +631,94 @@ export default function SellScreen() {
   const renderStep3 = () => (
     <View>
       <Text style={styles.stepTitle}>Pricing & Auction</Text>
+      <Text style={styles.stepSubtitle}>Set your starting price and duration.</Text>
 
       <View style={styles.field}>
         <Text style={styles.label}>Starting Price *</Text>
-        <View style={styles.priceInputRow}>
-          <Text style={styles.currencySymbol}>$</Text>
+        <View style={styles.largePriceRow}>
+          <View style={styles.currencyBadge}>
+            <Text style={styles.currencyBadgeText}>R</Text>
+          </View>
           <TextInput
-            style={[styles.input, styles.priceInput]}
+            style={styles.largePriceInput}
             value={startingPrice}
             onChangeText={setStartingPrice}
             keyboardType="decimal-pad"
             placeholder="0.00"
-            placeholderTextColor="#666"
+            placeholderTextColor="#252538"
           />
         </View>
+        {aiEstimate?.sell_price_range?.low != null && (
+          <View style={styles.aiHint}>
+            <Ionicons name="flash-outline" size={12} color="#f97316" />
+            <Text style={styles.aiHintText}>
+              AI suggests: R{Math.round(aiEstimate.sell_price_range.low).toLocaleString('en-ZA')} – R{Math.round(aiEstimate.sell_price_range.high).toLocaleString('en-ZA')}
+            </Text>
+          </View>
+        )}
       </View>
 
       <View style={styles.field}>
-        <View style={styles.toggleRow}>
-          <View>
-            <Text style={styles.label}>Reserve Price</Text>
-            <Text style={styles.toggleSubtext}>Minimum acceptable winning bid</Text>
+        <View style={styles.toggleCard}>
+          <View style={styles.toggleLeft}>
+            <View style={styles.toggleIconWrap}>
+              <Ionicons name="shield-checkmark-outline" size={18} color="#a0a0b8" />
+            </View>
+            <View>
+              <Text style={styles.toggleLabel}>Reserve Price</Text>
+              <Text style={styles.toggleSubtext}>Minimum acceptable bid</Text>
+            </View>
           </View>
           <Switch
             value={useReserve}
             onValueChange={setUseReserve}
-            trackColor={{ false: '#333', true: '#e94560' }}
+            trackColor={{ false: '#252538', true: '#e94560' }}
             thumbColor="#fff"
           />
         </View>
         {useReserve && (
           <View style={styles.priceInputRow}>
-            <Text style={styles.currencySymbol}>$</Text>
+            <Text style={styles.currencySymbol}>R</Text>
             <TextInput
               style={[styles.input, styles.priceInput]}
               value={reservePrice}
               onChangeText={setReservePrice}
               keyboardType="decimal-pad"
               placeholder="0.00"
-              placeholderTextColor="#666"
+              placeholderTextColor="#4a4a6a"
             />
           </View>
         )}
       </View>
 
       <View style={styles.field}>
-        <View style={styles.toggleRow}>
-          <View>
-            <Text style={styles.label}>Buy Now Price</Text>
-            <Text style={styles.toggleSubtext}>Allow instant purchase</Text>
+        <View style={styles.toggleCard}>
+          <View style={styles.toggleLeft}>
+            <View style={styles.toggleIconWrap}>
+              <Ionicons name="flash-outline" size={18} color="#a0a0b8" />
+            </View>
+            <View>
+              <Text style={styles.toggleLabel}>Buy Now Price</Text>
+              <Text style={styles.toggleSubtext}>Allow instant purchase</Text>
+            </View>
           </View>
           <Switch
             value={useBuyNow}
             onValueChange={setUseBuyNow}
-            trackColor={{ false: '#333', true: '#e94560' }}
+            trackColor={{ false: '#252538', true: '#e94560' }}
             thumbColor="#fff"
           />
         </View>
         {useBuyNow && (
           <View style={styles.priceInputRow}>
-            <Text style={styles.currencySymbol}>$</Text>
+            <Text style={styles.currencySymbol}>R</Text>
             <TextInput
               style={[styles.input, styles.priceInput]}
               value={buyNowPrice}
               onChangeText={setBuyNowPrice}
               keyboardType="decimal-pad"
               placeholder="0.00"
-              placeholderTextColor="#666"
+              placeholderTextColor="#4a4a6a"
             />
           </View>
         )}
@@ -552,41 +726,34 @@ export default function SellScreen() {
 
       <View style={styles.field}>
         <Text style={styles.label}>Auction Duration</Text>
-        <View style={styles.durationRow}>
-          <View style={styles.durationInput}>
-            <TextInput
-              style={styles.input}
-              value={auctionDays}
-              onChangeText={setAuctionDays}
-              keyboardType="number-pad"
-              maxLength={2}
-            />
-            <Text style={styles.durationLabel}>Days</Text>
-          </View>
-          <View style={styles.durationInput}>
-            <TextInput
-              style={styles.input}
-              value={auctionHours}
-              onChangeText={setAuctionHours}
-              keyboardType="number-pad"
-              maxLength={2}
-            />
-            <Text style={styles.durationLabel}>Hours</Text>
-          </View>
+        <View style={styles.durationSegmented}>
+          {DURATION_OPTIONS.map(opt => (
+            <TouchableOpacity
+              key={opt.days}
+              style={[styles.durationSegmentBtn, auctionDays === opt.days && styles.durationSegmentBtnActive]}
+              onPress={() => setAuctionDays(opt.days)}
+            >
+              <Text style={[styles.durationSegmentText, auctionDays === opt.days && styles.durationSegmentTextActive]}>
+                {opt.label}
+              </Text>
+            </TouchableOpacity>
+          ))}
         </View>
         <Text style={styles.durationHint}>Min 1 hour, max 14 days</Text>
       </View>
 
       <View style={styles.navButtons}>
         <TouchableOpacity style={styles.backBtn} onPress={() => setStep(2)}>
-          <Text style={styles.backBtnText}>← Back</Text>
+          <Ionicons name="arrow-back" size={18} color="#a0a0b8" />
+          <Text style={styles.backBtnText}>Back</Text>
         </TouchableOpacity>
         <TouchableOpacity
           style={[styles.nextBtn, { flex: 1 }, !startingPrice && styles.btnDisabled]}
           onPress={() => setStep(4)}
           disabled={!startingPrice}
         >
-          <Text style={styles.nextBtnText}>Next: Review →</Text>
+          <Text style={styles.nextBtnText}>Next: Review</Text>
+          <Ionicons name="arrow-forward" size={18} color="#fff" />
         </TouchableOpacity>
       </View>
     </View>
@@ -601,15 +768,36 @@ export default function SellScreen() {
     return (
       <View>
         <Text style={styles.stepTitle}>Review & Submit</Text>
+        <Text style={styles.stepSubtitle}>Everything look good? Go live!</Text>
 
+        {/* Photo carousel preview */}
         {photos.length > 0 && (
-          <Image source={{ uri: photos[0] }} style={styles.reviewImage} />
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.reviewPhotoStrip} contentContainerStyle={{ gap: 8 }}>
+            {photos.map((uri, i) => (
+              <View key={i} style={styles.reviewPhotoWrap}>
+                <Image source={{ uri }} style={styles.reviewPhotoThumb} />
+                {i === 0 && <View style={styles.reviewPhotoPrimaryDot} />}
+              </View>
+            ))}
+          </ScrollView>
         )}
 
         <View style={styles.reviewCard}>
           <Text style={styles.reviewTitle}>{title}</Text>
-          <Text style={styles.reviewMeta}>{category} · {CONDITIONS.find(c => c.value === condition)?.label}</Text>
-          {location ? <Text style={styles.reviewMeta}>📍 {location}</Text> : null}
+          <View style={styles.reviewMetaRow}>
+            <View style={styles.reviewMetaBadge}>
+              <Text style={styles.reviewMetaBadgeText}>{category}</Text>
+            </View>
+            <View style={styles.reviewMetaBadge}>
+              <Text style={styles.reviewMetaBadgeText}>{CONDITIONS.find(c => c.value === condition)?.emoji} {CONDITIONS.find(c => c.value === condition)?.label}</Text>
+            </View>
+            {location ? (
+              <View style={styles.reviewMetaBadge}>
+                <Ionicons name="location-outline" size={11} color="#a0a0b8" />
+                <Text style={styles.reviewMetaBadgeText}>{location}</Text>
+              </View>
+            ) : null}
+          </View>
           {description ? <Text style={styles.reviewDesc} numberOfLines={3}>{description}</Text> : null}
         </View>
 
@@ -617,18 +805,18 @@ export default function SellScreen() {
           <Text style={styles.reviewSectionTitle}>Pricing</Text>
           <View style={styles.reviewRow}>
             <Text style={styles.reviewKey}>Starting Price</Text>
-            <Text style={styles.reviewVal}>${parseFloat(startingPrice || '0').toFixed(2)}</Text>
+            <Text style={styles.reviewVal}>R{parseFloat(startingPrice || '0').toFixed(2)}</Text>
           </View>
           {useReserve && reservePrice && (
             <View style={styles.reviewRow}>
               <Text style={styles.reviewKey}>Reserve Price</Text>
-              <Text style={styles.reviewVal}>${parseFloat(reservePrice).toFixed(2)}</Text>
+              <Text style={styles.reviewVal}>R{parseFloat(reservePrice).toFixed(2)}</Text>
             </View>
           )}
           {useBuyNow && buyNowPrice && (
             <View style={styles.reviewRow}>
               <Text style={styles.reviewKey}>Buy Now Price</Text>
-              <Text style={styles.reviewVal}>${parseFloat(buyNowPrice).toFixed(2)}</Text>
+              <Text style={[styles.reviewVal, { color: '#f59e0b' }]}>R{parseFloat(buyNowPrice).toFixed(2)}</Text>
             </View>
           )}
           <View style={styles.reviewRow}>
@@ -641,18 +829,22 @@ export default function SellScreen() {
           <View style={styles.reviewCard}>
             <Text style={styles.reviewSectionTitle}>AI Estimate</Text>
             <Text style={styles.reviewAiVal}>
-              ${aiEstimate.estimated_market_value_low} – ${aiEstimate.estimated_market_value_high}
+              R{Math.round(aiEstimate.sell_price_range?.low || aiEstimate.estimated_market_value_low || 0).toLocaleString('en-ZA')} – R{Math.round(aiEstimate.sell_price_range?.high || aiEstimate.estimated_market_value_high || 0).toLocaleString('en-ZA')}
             </Text>
           </View>
         )}
 
-        <Text style={styles.reviewFee}>
-          Platform fee: 5% of final sale price. Funds held in escrow until delivery confirmed.
-        </Text>
+        <View style={styles.feeCard}>
+          <Ionicons name="information-circle-outline" size={16} color="#a0a0b8" />
+          <Text style={styles.reviewFee}>
+            5% platform fee on final sale price. Funds held in escrow until delivery confirmed.
+          </Text>
+        </View>
 
         <View style={styles.navButtons}>
           <TouchableOpacity style={styles.backBtn} onPress={() => setStep(3)}>
-            <Text style={styles.backBtnText}>← Back</Text>
+            <Ionicons name="arrow-back" size={18} color="#a0a0b8" />
+            <Text style={styles.backBtnText}>Back</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={[styles.submitBtn, submitting && styles.btnDisabled]}
@@ -662,7 +854,9 @@ export default function SellScreen() {
             {submitting ? (
               <ActivityIndicator color="#fff" />
             ) : (
-              <Text style={styles.submitBtnText}>List Item ✓</Text>
+              <>
+                <Text style={styles.submitBtnText}>🚀 List Item</Text>
+              </>
             )}
           </TouchableOpacity>
         </View>
@@ -673,9 +867,14 @@ export default function SellScreen() {
   // Step 5: Success
   const renderSuccess = () => (
     <View style={styles.successContainer}>
-      <Text style={styles.successIcon}>🎉</Text>
+      <View style={styles.successIconWrap}>
+        <View style={styles.successIconInner}>
+          <Text style={styles.successIcon}>🎉</Text>
+        </View>
+        <View style={styles.successIconRing} />
+      </View>
       <Text style={styles.successTitle}>Listing Created!</Text>
-      <Text style={styles.successSubtitle}>Your item is now live on BidTrust</Text>
+      <Text style={styles.successSubtitle}>Your item is now live on BidTrust and ready to receive bids.</Text>
 
       <TouchableOpacity
         style={styles.viewListingBtn}
@@ -683,10 +882,12 @@ export default function SellScreen() {
           if (createdListingId) router.push(`/listing/${createdListingId}`);
         }}
       >
+        <Ionicons name="eye-outline" size={18} color="#fff" />
         <Text style={styles.viewListingBtnText}>View Listing</Text>
       </TouchableOpacity>
 
       <TouchableOpacity style={styles.listAnotherBtn} onPress={resetForm}>
+        <Ionicons name="add-circle-outline" size={18} color="#a0a0b8" />
         <Text style={styles.listAnotherBtnText}>List Another Item</Text>
       </TouchableOpacity>
     </View>
@@ -707,136 +908,175 @@ export default function SellScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#1a1a2e',
+    backgroundColor: '#0d0d14',
   },
   content: {
     padding: 16,
-    paddingBottom: 40,
+    paddingBottom: 48,
   },
   progressContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 24,
+    marginBottom: 28,
+    paddingTop: 8,
   },
   progressStep: {
     alignItems: 'center',
-    width: 56,
+    width: 60,
   },
   progressDot: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: '#16213e',
-    borderWidth: 2,
-    borderColor: '#333',
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#13131f',
+    borderWidth: 1.5,
+    borderColor: '#252538',
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 4,
+    marginBottom: 5,
   },
   progressDotActive: {
     backgroundColor: '#e94560',
     borderColor: '#e94560',
+    shadowColor: '#e94560',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.4,
+    shadowRadius: 8,
   },
-  progressDotText: {
-    color: '#555',
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  progressDotTextActive: {
-    color: '#fff',
+  progressDotDone: {
+    backgroundColor: '#13131f',
+    borderColor: '#e94560',
+    borderWidth: 1.5,
   },
   progressLabel: {
-    color: '#555',
+    color: '#4a4a6a',
     fontSize: 10,
+    fontWeight: '600',
+    letterSpacing: 0.3,
   },
   progressLabelActive: {
     color: '#e94560',
-    fontWeight: '600',
+    fontWeight: '700',
+  },
+  progressLabelDone: {
+    color: '#a0a0b8',
   },
   progressLine: {
     flex: 1,
-    height: 2,
-    backgroundColor: '#333',
-    marginBottom: 16,
+    height: 1.5,
+    backgroundColor: '#252538',
+    marginBottom: 18,
+    marginHorizontal: -4,
   },
   progressLineActive: {
     backgroundColor: '#e94560',
   },
   stepTitle: {
-    fontSize: 22,
+    fontSize: 24,
     fontWeight: '700',
-    color: '#fff',
-    marginBottom: 6,
+    color: '#f1f1f1',
+    marginBottom: 4,
+    letterSpacing: -0.3,
   },
   stepSubtitle: {
-    fontSize: 13,
-    color: '#888',
-    marginBottom: 16,
+    fontSize: 14,
+    color: '#a0a0b8',
+    marginBottom: 20,
+    lineHeight: 20,
   },
-  photoGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
+  uploadZone: {
+    borderWidth: 1.5,
+    borderColor: '#252538',
+    borderStyle: 'dashed',
+    borderRadius: 16,
+    paddingVertical: 48,
+    alignItems: 'center',
+    marginBottom: 16,
+    backgroundColor: '#13131f',
+  },
+  uploadIconWrap: {
+    width: 68,
+    height: 68,
+    borderRadius: 34,
+    backgroundColor: 'rgba(233,69,96,0.1)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(233,69,96,0.2)',
+  },
+  uploadZoneTitle: {
+    color: '#f1f1f1',
+    fontSize: 16,
+    fontWeight: '700',
+    marginBottom: 4,
+  },
+  uploadZoneSubtitle: {
+    color: '#4a4a6a',
+    fontSize: 13,
+  },
+  photoStrip: {
     marginBottom: 12,
+  },
+  photoStripContent: {
+    gap: 8,
+    paddingVertical: 4,
   },
   photoWrapper: {
     position: 'relative',
-    width: 90,
-    height: 90,
+    width: 100,
+    height: 100,
+    borderRadius: 10,
+    overflow: 'hidden',
   },
   photoThumb: {
-    width: 90,
-    height: 90,
-    borderRadius: 8,
-    backgroundColor: '#16213e',
+    width: 100,
+    height: 100,
+    backgroundColor: '#1c1c2e',
   },
   primaryBadge: {
     position: 'absolute',
-    bottom: 4,
-    left: 4,
+    bottom: 6,
+    left: 6,
     backgroundColor: '#e94560',
     borderRadius: 4,
-    paddingHorizontal: 4,
+    paddingHorizontal: 5,
     paddingVertical: 2,
   },
   primaryBadgeText: {
     color: '#fff',
-    fontSize: 9,
-    fontWeight: '700',
+    fontSize: 8,
+    fontWeight: '800',
+    letterSpacing: 0.5,
   },
   removePhotoBtn: {
     position: 'absolute',
-    top: 4,
-    right: 4,
-    backgroundColor: 'rgba(0,0,0,0.7)',
+    top: 5,
+    right: 5,
+    backgroundColor: 'rgba(0,0,0,0.75)',
     borderRadius: 10,
     width: 20,
     height: 20,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  removePhotoBtnText: {
-    color: '#fff',
-    fontSize: 11,
-  },
-  addPhotoBtn: {
-    width: 90,
-    height: 90,
-    borderRadius: 8,
-    borderWidth: 2,
-    borderColor: '#333',
+  addMoreBtn: {
+    width: 100,
+    height: 100,
+    borderRadius: 10,
+    borderWidth: 1.5,
+    borderColor: '#252538',
     borderStyle: 'dashed',
     justifyContent: 'center',
     alignItems: 'center',
+    backgroundColor: '#13131f',
+    gap: 4,
   },
-  addPhotoBtnIcon: {
-    color: '#555',
-    fontSize: 24,
-  },
-  addPhotoBtnText: {
-    color: '#555',
+  addMoreText: {
+    color: '#4a4a6a',
     fontSize: 11,
+    fontWeight: '600',
   },
   photoActions: {
     flexDirection: 'row',
@@ -845,49 +1085,82 @@ const styles = StyleSheet.create({
   },
   photoActionBtn: {
     flex: 1,
-    backgroundColor: '#16213e',
-    borderRadius: 10,
-    padding: 12,
+    flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#13131f',
+    borderRadius: 12,
+    padding: 12,
     borderWidth: 1,
-    borderColor: '#0f3460',
+    borderColor: '#252538',
+    gap: 6,
   },
   photoActionBtnText: {
-    color: '#fff',
+    color: '#a0a0b8',
     fontSize: 14,
+    fontWeight: '600',
   },
   aiSection: {
-    backgroundColor: '#16213e',
-    borderRadius: 12,
+    backgroundColor: '#13131f',
+    borderRadius: 16,
     padding: 16,
     marginBottom: 20,
     borderWidth: 1,
-    borderColor: 'rgba(233,69,96,0.3)',
+    borderColor: 'rgba(249,115,22,0.25)',
   },
-  aiHeader: {
-    marginBottom: 12,
+  aiSectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginBottom: 14,
+  },
+  aiIconBadge: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    backgroundColor: 'rgba(249,115,22,0.15)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(249,115,22,0.3)',
+  },
+  aiIconBadgeText: {
+    color: '#f97316',
+    fontWeight: '900',
+    fontSize: 13,
+    letterSpacing: 0.5,
+  },
+  aiHeaderText: {
+    flex: 1,
   },
   aiTitle: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: '700',
-    color: '#fff',
-    marginBottom: 2,
+    color: '#f1f1f1',
+    marginBottom: 1,
   },
   aiSubtitle: {
-    color: '#888',
+    color: '#a0a0b8',
     fontSize: 12,
   },
   aiButtons: {
     flexDirection: 'row',
     gap: 8,
-    marginBottom: 8,
+    marginBottom: 10,
   },
   aiBtn: {
     flex: 1,
     backgroundColor: '#e94560',
-    borderRadius: 8,
+    borderRadius: 10,
     padding: 12,
     alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 6,
+    shadowColor: '#e94560',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
   },
   aiBtnText: {
     color: '#fff',
@@ -896,42 +1169,80 @@ const styles = StyleSheet.create({
   },
   aiDescribeBtn: {
     flex: 1,
-    backgroundColor: '#0f3460',
-    borderRadius: 8,
+    backgroundColor: 'rgba(249,115,22,0.12)',
+    borderRadius: 10,
     padding: 12,
     alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 6,
     borderWidth: 1,
-    borderColor: '#1e4a7a',
+    borderColor: 'rgba(249,115,22,0.3)',
   },
   aiDescribeBtnText: {
-    color: '#fff',
+    color: '#f97316',
     fontSize: 14,
+    fontWeight: '600',
+  },
+  aiErrorBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: 'rgba(233,69,96,0.08)',
+    borderRadius: 8,
+    padding: 10,
+    marginBottom: 8,
   },
   aiError: {
     color: '#e94560',
     fontSize: 13,
-    marginBottom: 8,
+    flex: 1,
+  },
+  aiHint: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    marginTop: 8,
+    backgroundColor: 'rgba(249,115,22,0.08)',
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  aiHintText: {
+    color: '#f97316',
+    fontSize: 12,
+    fontWeight: '600',
   },
   usePricesBtn: {
-    backgroundColor: 'rgba(233,69,96,0.15)',
+    backgroundColor: 'rgba(233,69,96,0.1)',
     borderWidth: 1,
-    borderColor: '#e94560',
-    borderRadius: 8,
-    padding: 10,
+    borderColor: 'rgba(233,69,96,0.3)',
+    borderRadius: 10,
+    padding: 11,
     alignItems: 'center',
-    marginTop: 8,
+    marginTop: 10,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 6,
   },
   usePricesBtnText: {
     color: '#e94560',
-    fontWeight: '600',
+    fontWeight: '700',
     fontSize: 14,
   },
   nextBtn: {
     backgroundColor: '#e94560',
-    borderRadius: 10,
-    padding: 15,
+    borderRadius: 12,
+    padding: 16,
     alignItems: 'center',
     marginTop: 8,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 8,
+    shadowColor: '#e94560',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
   },
   nextBtnText: {
     color: '#fff',
@@ -942,127 +1253,242 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   label: {
-    color: '#aaa',
-    fontSize: 13,
-    fontWeight: '600',
+    color: '#a0a0b8',
+    fontSize: 11,
+    fontWeight: '700',
     marginBottom: 8,
     textTransform: 'uppercase',
-    letterSpacing: 0.5,
+    letterSpacing: 0.8,
   },
   input: {
-    backgroundColor: '#16213e',
-    borderRadius: 10,
-    padding: 13,
-    color: '#fff',
+    backgroundColor: '#13131f',
+    borderRadius: 12,
+    padding: 14,
+    color: '#f1f1f1',
     fontSize: 15,
     borderWidth: 1,
-    borderColor: '#0f3460',
+    borderColor: '#252538',
+  },
+  inputWithIcon: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#13131f',
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 14,
+    borderWidth: 1,
+    borderColor: '#252538',
+  },
+  inputFlat: {
+    flex: 1,
+    color: '#f1f1f1',
+    fontSize: 15,
   },
   textArea: {
     minHeight: 100,
     textAlignVertical: 'top',
+    lineHeight: 22,
   },
-  optionGrid: {
+  categoryGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 8,
   },
-  optionBtn: {
-    backgroundColor: '#16213e',
-    borderRadius: 20,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
+  categoryGridItem: {
+    width: (SCREEN_WIDTH - 56) / 3,
+    backgroundColor: '#13131f',
+    borderRadius: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 8,
+    alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#0f3460',
+    borderColor: '#252538',
+    gap: 4,
   },
-  optionBtnActive: {
-    backgroundColor: '#e94560',
+  categoryGridItemActive: {
+    backgroundColor: 'rgba(233,69,96,0.1)',
     borderColor: '#e94560',
   },
-  optionBtnText: {
-    color: '#aaa',
-    fontSize: 13,
+  categoryGridEmoji: {
+    fontSize: 22,
   },
-  optionBtnTextActive: {
-    color: '#fff',
+  categoryGridText: {
+    color: '#a0a0b8',
+    fontSize: 11,
     fontWeight: '600',
+    textAlign: 'center',
   },
-  conditionBtn: {
+  categoryGridTextActive: {
+    color: '#e94560',
+    fontWeight: '700',
+  },
+  conditionPillRow: {
+    gap: 8,
+    paddingVertical: 2,
+  },
+  conditionPill: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: '#16213e',
-    borderRadius: 10,
-    padding: 12,
-    marginBottom: 8,
+    gap: 5,
+    backgroundColor: '#13131f',
+    borderRadius: 24,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
     borderWidth: 1,
-    borderColor: '#0f3460',
+    borderColor: '#252538',
   },
-  conditionBtnActive: {
-    borderColor: '#e94560',
+  conditionPillActive: {
     backgroundColor: 'rgba(233,69,96,0.1)',
+    borderColor: '#e94560',
   },
-  conditionLabel: {
-    color: '#fff',
-    fontWeight: '600',
+  conditionPillEmoji: {
     fontSize: 14,
-    marginBottom: 2,
   },
-  conditionLabelActive: {
+  conditionPillText: {
+    color: '#a0a0b8',
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  conditionPillTextActive: {
     color: '#e94560',
+    fontWeight: '700',
   },
   conditionDesc: {
-    color: '#666',
-    fontSize: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    marginTop: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    backgroundColor: '#13131f',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#252538',
   },
-  checkmark: {
-    color: '#e94560',
-    fontSize: 18,
-    fontWeight: '700',
+  conditionDescText: {
+    color: '#a0a0b8',
+    fontSize: 12,
+    flex: 1,
+    lineHeight: 18,
+  },
+  largePriceRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#13131f',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#252538',
+    overflow: 'hidden',
+  },
+  currencyBadge: {
+    backgroundColor: '#1c1c2e',
+    paddingHorizontal: 16,
+    paddingVertical: 18,
+    borderRightWidth: 1,
+    borderRightColor: '#252538',
+  },
+  currencyBadgeText: {
+    color: '#f1f1f1',
+    fontSize: 22,
+    fontWeight: '900',
+  },
+  largePriceInput: {
+    flex: 1,
+    color: '#f1f1f1',
+    fontSize: 28,
+    fontWeight: '900',
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    letterSpacing: -0.5,
   },
   priceInputRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    marginTop: 10,
   },
   currencySymbol: {
-    color: '#fff',
+    color: '#f1f1f1',
     fontSize: 20,
     fontWeight: '700',
     marginRight: 8,
   },
   priceInput: {
     flex: 1,
-    fontSize: 22,
+    fontSize: 20,
     fontWeight: '700',
   },
-  toggleRow: {
+  toggleCard: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 10,
+    backgroundColor: '#13131f',
+    borderRadius: 12,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: '#252538',
+    marginBottom: 2,
+  },
+  toggleLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    flex: 1,
+  },
+  toggleIconWrap: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    backgroundColor: '#1c1c2e',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#252538',
+  },
+  toggleLabel: {
+    color: '#f1f1f1',
+    fontSize: 15,
+    fontWeight: '600',
+    marginBottom: 2,
   },
   toggleSubtext: {
-    color: '#666',
+    color: '#4a4a6a',
     fontSize: 12,
-    marginTop: 2,
   },
-  durationRow: {
+  durationSegmented: {
     flexDirection: 'row',
-    gap: 12,
+    backgroundColor: '#13131f',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#252538',
+    padding: 4,
+    gap: 4,
   },
-  durationInput: {
+  durationSegmentBtn: {
     flex: 1,
+    paddingVertical: 10,
     alignItems: 'center',
+    borderRadius: 8,
   },
-  durationLabel: {
-    color: '#888',
-    fontSize: 12,
-    marginTop: 4,
+  durationSegmentBtnActive: {
+    backgroundColor: '#e94560',
+    shadowColor: '#e94560',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+  },
+  durationSegmentText: {
+    color: '#4a4a6a',
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  durationSegmentTextActive: {
+    color: '#fff',
   },
   durationHint: {
-    color: '#555',
+    color: '#4a4a6a',
     fontSize: 11,
-    marginTop: 4,
+    marginTop: 6,
+    textAlign: 'center',
   },
   navButtons: {
     flexDirection: 'row',
@@ -1070,91 +1496,151 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   backBtn: {
-    backgroundColor: '#16213e',
-    borderRadius: 10,
-    padding: 15,
+    backgroundColor: '#13131f',
+    borderRadius: 12,
+    padding: 16,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#333',
-    minWidth: 80,
+    borderColor: '#252538',
+    flexDirection: 'row',
+    gap: 6,
+    minWidth: 90,
+    justifyContent: 'center',
   },
   backBtnText: {
-    color: '#aaa',
+    color: '#a0a0b8',
     fontSize: 14,
+    fontWeight: '600',
   },
   btnDisabled: {
-    opacity: 0.4,
+    opacity: 0.35,
   },
-  reviewImage: {
-    width: '100%',
-    height: 200,
-    borderRadius: 12,
+  reviewPhotoStrip: {
     marginBottom: 16,
-    backgroundColor: '#16213e',
+  },
+  reviewPhotoWrap: {
+    position: 'relative',
+    borderRadius: 10,
+    overflow: 'hidden',
+  },
+  reviewPhotoThumb: {
+    width: 100,
+    height: 80,
+    backgroundColor: '#1c1c2e',
+  },
+  reviewPhotoPrimaryDot: {
+    position: 'absolute',
+    top: 6,
+    left: 6,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#e94560',
+    borderWidth: 1.5,
+    borderColor: '#fff',
   },
   reviewCard: {
-    backgroundColor: '#16213e',
+    backgroundColor: '#13131f',
     borderRadius: 12,
     padding: 16,
     marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#252538',
   },
   reviewTitle: {
-    color: '#fff',
+    color: '#f1f1f1',
     fontSize: 18,
     fontWeight: '700',
-    marginBottom: 4,
+    marginBottom: 10,
+    letterSpacing: -0.2,
   },
-  reviewMeta: {
-    color: '#888',
-    fontSize: 13,
-    marginBottom: 4,
+  reviewMetaRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginBottom: 8,
+  },
+  reviewMetaBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    backgroundColor: '#1c1c2e',
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderWidth: 1,
+    borderColor: '#252538',
+  },
+  reviewMetaBadgeText: {
+    color: '#a0a0b8',
+    fontSize: 12,
+    fontWeight: '600',
   },
   reviewDesc: {
-    color: '#bbb',
+    color: '#a0a0b8',
     fontSize: 13,
-    marginTop: 8,
-    lineHeight: 18,
+    marginTop: 6,
+    lineHeight: 20,
   },
   reviewSectionTitle: {
-    color: '#aaa',
-    fontSize: 12,
+    color: '#4a4a6a',
+    fontSize: 11,
     fontWeight: '700',
     textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    marginBottom: 10,
+    letterSpacing: 0.8,
+    marginBottom: 12,
   },
   reviewRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: 6,
+    marginBottom: 8,
+    alignItems: 'center',
   },
   reviewKey: {
-    color: '#888',
+    color: '#a0a0b8',
     fontSize: 14,
   },
   reviewVal: {
-    color: '#fff',
+    color: '#f1f1f1',
     fontSize: 14,
-    fontWeight: '600',
-  },
-  reviewAiVal: {
-    color: '#e94560',
-    fontSize: 20,
     fontWeight: '700',
   },
-  reviewFee: {
-    color: '#555',
-    fontSize: 12,
-    textAlign: 'center',
+  reviewAiVal: {
+    color: '#f97316',
+    fontSize: 22,
+    fontWeight: '900',
+    letterSpacing: -0.5,
+  },
+  feeCard: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
+    backgroundColor: '#13131f',
+    borderRadius: 10,
+    padding: 12,
     marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#252538',
+  },
+  reviewFee: {
+    color: '#a0a0b8',
+    fontSize: 12,
     lineHeight: 18,
+    flex: 1,
   },
   submitBtn: {
     flex: 1,
     backgroundColor: '#e94560',
-    borderRadius: 10,
-    padding: 15,
+    borderRadius: 12,
+    padding: 16,
     alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 8,
+    shadowColor: '#e94560',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.4,
+    shadowRadius: 12,
   },
   submitBtnText: {
     color: '#fff',
@@ -1163,31 +1649,67 @@ const styles = StyleSheet.create({
   },
   successContainer: {
     alignItems: 'center',
-    paddingVertical: 60,
+    paddingVertical: 48,
+    paddingHorizontal: 24,
+  },
+  successIconWrap: {
+    position: 'relative',
+    width: 120,
+    height: 120,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 28,
+  },
+  successIconInner: {
+    width: 88,
+    height: 88,
+    borderRadius: 44,
+    backgroundColor: 'rgba(16,185,129,0.12)',
+    borderWidth: 1.5,
+    borderColor: 'rgba(16,185,129,0.25)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  successIconRing: {
+    position: 'absolute',
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    borderWidth: 1,
+    borderColor: 'rgba(16,185,129,0.1)',
   },
   successIcon: {
-    fontSize: 64,
-    marginBottom: 16,
+    fontSize: 44,
   },
   successTitle: {
     fontSize: 28,
     fontWeight: '800',
-    color: '#fff',
+    color: '#f1f1f1',
     marginBottom: 8,
+    letterSpacing: -0.5,
   },
   successSubtitle: {
-    color: '#888',
+    color: '#a0a0b8',
     fontSize: 15,
-    marginBottom: 32,
+    marginBottom: 36,
+    textAlign: 'center',
+    lineHeight: 22,
   },
   viewListingBtn: {
     backgroundColor: '#e94560',
     borderRadius: 12,
     paddingHorizontal: 32,
-    paddingVertical: 14,
+    paddingVertical: 15,
     marginBottom: 12,
     width: '100%',
     alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 8,
+    shadowColor: '#e94560',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.4,
+    shadowRadius: 12,
   },
   viewListingBtnText: {
     color: '#fff',
@@ -1195,17 +1717,84 @@ const styles = StyleSheet.create({
     fontSize: 16,
   },
   listAnotherBtn: {
-    backgroundColor: '#16213e',
+    backgroundColor: '#13131f',
     borderRadius: 12,
     paddingHorizontal: 32,
-    paddingVertical: 14,
+    paddingVertical: 15,
     width: '100%',
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#333',
+    borderColor: '#252538',
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 8,
   },
   listAnotherBtnText: {
-    color: '#aaa',
+    color: '#a0a0b8',
     fontSize: 16,
+    fontWeight: '600',
+  },
+  qualifySection: {
+    backgroundColor: '#0d0d14',
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(249,115,22,0.15)',
+    gap: 10,
+  },
+  qualifyTitle: {
+    color: '#f97316',
+    fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
+    marginBottom: 2,
+  },
+  qualifyField: {
+    marginBottom: 6,
+  },
+  qualifyLabel: {
+    color: '#a0a0b8',
+    fontSize: 12,
+    fontWeight: '600',
+    marginBottom: 6,
+  },
+  qualifyInput: {
+    backgroundColor: '#13131f',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    color: '#f1f1f1',
+    fontSize: 13,
+    borderWidth: 1,
+    borderColor: '#252538',
+  },
+  qualifyPriceRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#13131f',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#252538',
+    overflow: 'hidden',
+  },
+  qualifyCurrency: {
+    color: '#f1f1f1',
+    fontSize: 16,
+    fontWeight: '800',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    backgroundColor: '#1c1c2e',
+    borderRightWidth: 1,
+    borderRightColor: '#252538',
+  },
+  qualifyPriceInput: {
+    flex: 1,
+    color: '#f1f1f1',
+    fontSize: 16,
+    fontWeight: '700',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
   },
 });

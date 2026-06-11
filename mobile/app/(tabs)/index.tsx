@@ -112,14 +112,18 @@ export default function HomeScreen() {
       {/* App Header */}
       <View style={styles.appHeader}>
         <View style={styles.headerLeft}>
+          <View style={styles.logoMark}>
+            <Ionicons name="hammer" size={14} color="#fff" />
+          </View>
           <Text style={styles.appLogoText}>Bid<Text style={styles.appLogoAccent}>Trust</Text></Text>
         </View>
         <View style={styles.headerRight}>
           <TouchableOpacity style={styles.headerIconBtn}>
-            <Ionicons name="search-outline" size={22} color="#a0a0b8" />
+            <Ionicons name="search-outline" size={20} color="#a0a0b8" />
           </TouchableOpacity>
           <TouchableOpacity style={styles.headerIconBtn}>
-            <Ionicons name="notifications-outline" size={22} color="#a0a0b8" />
+            <Ionicons name="notifications-outline" size={20} color="#a0a0b8" />
+            <View style={styles.notifDot} />
           </TouchableOpacity>
         </View>
       </View>
@@ -212,11 +216,15 @@ export default function HomeScreen() {
       {!loading && listings.length === 0 && !error && (
         <View style={styles.emptyContainer}>
           <View style={styles.emptyIconWrap}>
-            <Ionicons name="storefront-outline" size={48} color="#252538" />
+            <View style={styles.emptyIconInner}>
+              <Ionicons name="storefront-outline" size={40} color="#e94560" />
+            </View>
+            <View style={styles.emptyIconRing} />
           </View>
           <Text style={styles.emptyTitle}>No listings yet</Text>
-          <Text style={styles.emptySubtitle}>Be the first to list an item for sale!</Text>
+          <Text style={styles.emptySubtitle}>Be the first to list an item for sale and reach thousands of buyers!</Text>
           <TouchableOpacity style={styles.emptyCtaBtn} onPress={() => router.push('/(tabs)/sell')}>
+            <Ionicons name="add-circle-outline" size={18} color="#fff" />
             <Text style={styles.emptyCtaBtnText}>List the First Item</Text>
           </TouchableOpacity>
         </View>
@@ -227,8 +235,11 @@ export default function HomeScreen() {
   if (loading && listings.length === 0) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#e94560" />
-        <Text style={styles.loadingText}>Loading auctions...</Text>
+        <View style={styles.loadingSpinnerWrap}>
+          <ActivityIndicator size="large" color="#e94560" />
+        </View>
+        <Text style={styles.loadingTitle}>Loading Auctions</Text>
+        <Text style={styles.loadingText}>Finding the best deals for you...</Text>
       </View>
     );
   }
@@ -272,11 +283,27 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: '#0d0d14',
+    gap: 12,
+  },
+  loadingSpinnerWrap: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    backgroundColor: '#13131f',
+    borderWidth: 1,
+    borderColor: '#252538',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  loadingTitle: {
+    color: '#f1f1f1',
+    fontSize: 18,
+    fontWeight: '700',
   },
   loadingText: {
-    color: '#a0a0b8',
-    marginTop: 12,
-    fontSize: 14,
+    color: '#4a4a6a',
+    fontSize: 13,
   },
   listContent: {
     paddingBottom: 24,
@@ -286,22 +313,38 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
-    paddingTop: 16,
+    paddingTop: 20,
     paddingBottom: 12,
   },
-  headerLeft: {},
+  headerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  logoMark: {
+    width: 30,
+    height: 30,
+    borderRadius: 8,
+    backgroundColor: '#e94560',
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#e94560',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.4,
+    shadowRadius: 8,
+  },
   appLogoText: {
     fontSize: 22,
     fontWeight: '900',
     color: '#f1f1f1',
-    letterSpacing: 0.5,
+    letterSpacing: 0.3,
   },
   appLogoAccent: {
     color: '#e94560',
   },
   headerRight: {
     flexDirection: 'row',
-    gap: 4,
+    gap: 8,
   },
   headerIconBtn: {
     width: 38,
@@ -312,11 +355,23 @@ const styles = StyleSheet.create({
     borderColor: '#252538',
     justifyContent: 'center',
     alignItems: 'center',
+    position: 'relative',
+  },
+  notifDot: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    width: 7,
+    height: 7,
+    borderRadius: 4,
+    backgroundColor: '#e94560',
+    borderWidth: 1.5,
+    borderColor: '#0d0d14',
   },
   searchRow: {
     flexDirection: 'row',
     paddingHorizontal: 12,
-    paddingBottom: 8,
+    paddingBottom: 10,
     gap: 8,
   },
   searchContainer: {
@@ -344,6 +399,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 11,
     justifyContent: 'center',
+    shadowColor: '#e94560',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
   },
   searchBtnText: {
     color: '#fff',
@@ -351,12 +410,13 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
   categoryScroll: {
-    marginTop: 4,
+    marginTop: 2,
     marginBottom: 4,
   },
   categoryContent: {
     paddingHorizontal: 12,
     gap: 8,
+    paddingVertical: 4,
   },
   chip: {
     flexDirection: 'row',
@@ -372,6 +432,10 @@ const styles = StyleSheet.create({
   chipActive: {
     backgroundColor: '#e94560',
     borderColor: '#e94560',
+    shadowColor: '#e94560',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 6,
   },
   chipEmoji: {
     fontSize: 13,
@@ -387,25 +451,30 @@ const styles = StyleSheet.create({
   },
   sectionHeader: {
     paddingHorizontal: 12,
-    paddingTop: 12,
+    paddingTop: 16,
     paddingBottom: 8,
   },
   sectionTitleRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 10,
+    marginBottom: 12,
     gap: 8,
   },
   sectionTitle: {
     color: '#f1f1f1',
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: '700',
+    letterSpacing: -0.3,
   },
   countBadge: {
     backgroundColor: '#e94560',
     borderRadius: 24,
     paddingHorizontal: 8,
     paddingVertical: 2,
+    shadowColor: '#e94560',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
   },
   countBadgeText: {
     color: '#fff',
@@ -419,6 +488,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 4,
     alignItems: 'center',
+    position: 'relative',
   },
   sortChipText: {
     color: '#4a4a6a',
@@ -469,28 +539,45 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
   },
   emptyIconWrap: {
-    width: 96,
-    height: 96,
-    borderRadius: 48,
-    backgroundColor: '#13131f',
-    borderWidth: 1,
-    borderColor: '#252538',
+    position: 'relative',
+    width: 108,
+    height: 108,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 20,
+    marginBottom: 24,
+  },
+  emptyIconInner: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: 'rgba(233,69,96,0.1)',
+    borderWidth: 1.5,
+    borderColor: 'rgba(233,69,96,0.25)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  emptyIconRing: {
+    position: 'absolute',
+    width: 108,
+    height: 108,
+    borderRadius: 54,
+    borderWidth: 1,
+    borderColor: 'rgba(233,69,96,0.1)',
   },
   emptyTitle: {
     color: '#f1f1f1',
-    fontSize: 20,
+    fontSize: 22,
     fontWeight: '700',
     marginBottom: 8,
+    letterSpacing: -0.3,
   },
   emptySubtitle: {
     color: '#a0a0b8',
     fontSize: 14,
     textAlign: 'center',
-    marginBottom: 28,
-    lineHeight: 21,
+    marginBottom: 32,
+    lineHeight: 22,
+    maxWidth: 260,
   },
   emptyCtaBtn: {
     backgroundColor: '#e94560',
@@ -502,6 +589,9 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.4,
     shadowRadius: 12,
     elevation: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
   emptyCtaBtnText: {
     color: '#fff',
