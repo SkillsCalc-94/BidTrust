@@ -11,6 +11,7 @@ import {
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import Tilt3D from '../../components/Tilt3D';
+import SplineScene from '../../components/SplineScene';
 
 const { width } = Dimensions.get('window');
 
@@ -112,6 +113,14 @@ export default function LandingScreen() {
             ))}
           </ScrollView>
         </Animated.View>
+
+        {/* Interactive 3D scene (web only — renders nothing on iOS/Android) */}
+        <View style={styles.splineSection}>
+          <SplineScene
+            scene="https://prod.spline.design/kZDDjO5HuC9GJUM2/scene.splinecode"
+            height={420}
+          />
+        </View>
 
         {/* Phone mockup frame — interactive 3D tilt */}
         <View style={styles.phoneMockupSection}>
@@ -374,6 +383,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 32,
     position: 'relative',
+  },
+  splineSection: {
+    paddingHorizontal: 16,
+    marginTop: 8,
+    width: '100%',
+    maxWidth: 720,
+    alignSelf: 'center',
   },
   phoneMockupOuter: {
     width: 180,
