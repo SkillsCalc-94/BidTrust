@@ -180,6 +180,8 @@ export default function RegisterScreen() {
               <Text style={styles.footerLink}>Sign In</Text>
             </TouchableOpacity>
           </View>
+            </>
+          )}
         </View>
       </ScrollView>
     </KeyboardAvoidingView>
@@ -303,5 +305,20 @@ const styles = StyleSheet.create({
     color: '#e94560',
     fontSize: 14,
     fontWeight: '600',
+  },
+  successBox: {
+    backgroundColor: 'rgba(76, 175, 80, 0.15)',
+    borderWidth: 1,
+    borderColor: '#4caf50',
+    borderRadius: 8,
+    padding: 16,
+    alignItems: 'center',
+    gap: 12,
+  },
+  successText: {
+    color: '#4caf50',
+    fontSize: 15,
+    fontWeight: '600',
+    textAlign: 'center',
   },
 });
