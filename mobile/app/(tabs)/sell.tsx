@@ -58,6 +58,32 @@ export default function SellScreen() {
   const [createdListingId, setCreatedListingId] = useState<string | null>(null);
 
   async function pickImages() {
+    if (Platform.OS === 'web') {
+      // Web: use file input
+      return new Promise<void>((resolve) => {
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = 'image/*';
+        input.multiple = true;
+        input.onchange = (e: any) => {
+          const files: FileList = e.target.files;
+          if (!files || files.length === 0) { resolve(); return; }
+          const readers: Promise<string>[] = Array.from(files).slice(0, 10).map(
+            (file) =>
+              new Promise<string>((res) => {
+                const reader = new FileReader();
+                reader.onload = () => res(reader.result as string);
+                reader.readAsDataURL(file);
+              })
+          );
+          Promise.all(readers).then((uris) => {
+            setPhotos(prev => [...prev, ...uris].slice(0, 10));
+            resolve();
+          });
+        };
+        input.click();
+      });
+    }
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!permission.granted) {
       Alert.alert('Permission needed', 'Please allow access to your photo library');
@@ -76,6 +102,26 @@ export default function SellScreen() {
   }
 
   async function takePhoto() {
+    if (Platform.OS === 'web') {
+      // On web, reuse file picker for camera capture
+      return new Promise<void>((resolve) => {
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = 'image/*';
+        input.capture = 'environment';
+        input.onchange = (e: any) => {
+          const file = e.target.files?.[0];
+          if (!file) { resolve(); return; }
+          const reader = new FileReader();
+          reader.onload = () => {
+            setPhotos(prev => [...prev, reader.result as string].slice(0, 10));
+            resolve();
+          };
+          reader.readAsDataURL(file);
+        };
+        input.click();
+      });
+    }
     const permission = await ImagePicker.requestCameraPermissionsAsync();
     if (!permission.granted) {
       Alert.alert('Permission needed', 'Please allow camera access');

@@ -1,22 +1,41 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Platform } from 'react-native';
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3001/api';
 
 async function getAuthHeader(): Promise<Record<string, string>> {
   try {
-    // Supabase stores session under a specific key
-    const keys = await AsyncStorage.getAllKeys();
-    const supabaseKey = keys.find((k) => k.includes('supabase') && k.includes('auth'));
-    if (supabaseKey) {
-      const raw = await AsyncStorage.getItem(supabaseKey);
-      if (raw) {
-        const parsed = JSON.parse(raw);
-        const token =
-          parsed?.access_token ||
-          parsed?.currentSession?.access_token ||
-          parsed?.session?.access_token;
-        if (token) {
-          return { Authorization: `Bearer ${token}` };
+    if (Platform.OS === 'web') {
+      // On web, Supabase stores session in localStorage
+      const keys = Object.keys(window.localStorage);
+      const supabaseKey = keys.find((k) => k.includes('supabase') && k.includes('auth'));
+      if (supabaseKey) {
+        const raw = window.localStorage.getItem(supabaseKey);
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          const token =
+            parsed?.access_token ||
+            parsed?.currentSession?.access_token ||
+            parsed?.session?.access_token;
+          if (token) {
+            return { Authorization: `Bearer ${token}` };
+          }
+        }
+      }
+    } else {
+      const AsyncStorage = require('@react-native-async-storage/async-storage').default;
+      const keys = await AsyncStorage.getAllKeys();
+      const supabaseKey = keys.find((k: string) => k.includes('supabase') && k.includes('auth'));
+      if (supabaseKey) {
+        const raw = await AsyncStorage.getItem(supabaseKey);
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          const token =
+            parsed?.access_token ||
+            parsed?.currentSession?.access_token ||
+            parsed?.session?.access_token;
+          if (token) {
+            return { Authorization: `Bearer ${token}` };
+          }
         }
       }
     }
