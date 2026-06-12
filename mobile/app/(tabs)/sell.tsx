@@ -247,12 +247,7 @@ export default function SellScreen() {
   }
 
   function quickScanAndEstimate() {
-    if (Platform.OS === 'web') {
-      // Web: use hidden file input (synchronous — never blocked by browser gesture policy)
-      webScanInputRef.current?.click();
-      return;
-    }
-    // Native: open the in-app live camera scanner
+    // Both web and native: open the in-app live camera scanner
     setScannerOpen(true);
   }
 
@@ -266,10 +261,19 @@ export default function SellScreen() {
     setAiError('');
 
     try {
-      // Build a native FormData for the backend
       const fd = new FormData();
-      const ext = imageUri.split('.').pop() || 'jpg';
-      (fd as any).append('image', { uri: imageUri, type: `image/${ext}`, name: `scan.${ext}` } as any);
+      if (Platform.OS === 'web') {
+        // Web: imageUri is a base64 data URL from canvas capture
+        const [meta, b64] = imageUri.split(',');
+        const mime = meta.match(/:(.*?);/)?.[1] || 'image/jpeg';
+        const bytes = atob(b64);
+        const arr = new Uint8Array(bytes.length);
+        for (let j = 0; j < bytes.length; j++) arr[j] = bytes.charCodeAt(j);
+        fd.append('image', new Blob([arr], { type: mime }), 'scan.jpg');
+      } else {
+        const ext = imageUri.split('.').pop() || 'jpg';
+        (fd as any).append('image', { uri: imageUri, type: `image/${ext}`, name: `scan.${ext}` } as any);
+      }
 
       if (barcode) {
         // Barcode path — lookup product + competitor prices
@@ -1096,14 +1100,12 @@ export default function SellScreen() {
 
   return (
     <>
-      {/* Native camera scanner modal */}
-      {Platform.OS !== 'web' && (
-        <CameraScanner
-          visible={scannerOpen}
-          onClose={() => setScannerOpen(false)}
-          onCapture={handleScanResult}
-        />
-      )}
+      {/* Camera scanner — web uses CameraScanner.web.tsx (getUserMedia), native uses CameraScanner.tsx (expo-camera) */}
+      <CameraScanner
+        visible={scannerOpen}
+        onClose={() => setScannerOpen(false)}
+        onCapture={handleScanResult}
+      />
 
       <ScrollView style={styles.container} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         {/* Hidden web file inputs — rendered in DOM so .click() stays in user-gesture context */}
