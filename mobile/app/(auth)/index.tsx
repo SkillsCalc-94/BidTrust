@@ -57,7 +57,7 @@ const TRUST_TICKER = [
 const STATS = [
   { num: '12K+', label: 'Items Listed' },
   { num: '98%', label: 'Satisfaction' },
-  { num: '$2.4M', label: 'Transacted' },
+  { num: 'R45M', label: 'Transacted' },
 ];
 
 export default function LandingScreen() {
@@ -150,7 +150,7 @@ export default function LandingScreen() {
                     </View>
                     <View style={styles.phoneMockCardInfo}>
                       <Text style={styles.phoneMockCardTitle}>MacBook Pro</Text>
-                      <Text style={styles.phoneMockCardPrice}>$899</Text>
+                      <Text style={styles.phoneMockCardPrice}>R15 999</Text>
                     </View>
                   </View>
                   <View style={[styles.phoneMockCard, { backgroundColor: '#1c1c2e' }]}>
@@ -159,7 +159,7 @@ export default function LandingScreen() {
                     </View>
                     <View style={styles.phoneMockCardInfo}>
                       <Text style={styles.phoneMockCardTitle}>Rolex Sub</Text>
-                      <Text style={styles.phoneMockCardPrice}>$4.2K</Text>
+                      <Text style={styles.phoneMockCardPrice}>R89K</Text>
                     </View>
                   </View>
                 </View>
