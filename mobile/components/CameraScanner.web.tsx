@@ -1,7 +1,9 @@
 /**
  * Web implementation of CameraScanner.
- * Uses browser getUserMedia for live viewfinder, BarcodeDetector API for
- * auto barcode scanning, and canvas snapshot for photo capture.
+ * Uses browser getUserMedia for live viewfinder and canvas snapshot for capture.
+ * Barcode scanning priority:
+ *   1. Native BarcodeDetector API (Chrome/Android — fastest, no bundle cost)
+ *   2. @zxing/browser (iOS Safari + all other browsers — full cross-browser support)
  */
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import {
@@ -15,6 +17,7 @@ import {
   Dimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { BrowserMultiFormatReader, NotFoundException } from '@zxing/browser';
 
 const { width: SW, height: SH } = Dimensions.get('window');
 const FRAME = Math.min(SW * 0.72, 280);
@@ -123,30 +126,66 @@ export default function CameraScanner({ visible, onClose, onCapture }: Props) {
     } catch {}
   }, [torch]);
 
-  // BarcodeDetector scanning loop
+  // Barcode scanning loop — uses native BarcodeDetector if available, falls back to ZXing
+  const zxingRef = useRef<BrowserMultiFormatReader | null>(null);
+
   useEffect(() => {
     if (phase !== 'live') return;
-    if (!('BarcodeDetector' in window)) return; // not supported, user taps shutter manually
 
-    const detector = new (window as any).BarcodeDetector({
-      formats: ['ean_13', 'ean_8', 'upc_a', 'upc_e', 'code_128', 'code_39', 'qr_code', 'data_matrix', 'pdf417'],
-    });
+    const useNative = 'BarcodeDetector' in window;
 
-    barcodeIntervalRef.current = setInterval(async () => {
-      if (detectedRef.current || !videoRef.current || videoRef.current.readyState < 2) return;
-      try {
-        const barcodes = await detector.detect(videoRef.current);
-        if (barcodes.length > 0 && !detectedRef.current) {
-          detectedRef.current = true;
-          const bc = barcodes[0];
-          setDetectedBarcode({ type: bc.format, data: bc.rawValue });
-          setTimeout(() => captureFrame({ type: bc.format, data: bc.rawValue }), 300);
+    if (useNative) {
+      // ── Native BarcodeDetector (Chrome / Android) ──────────────────────────
+      const detector = new (window as any).BarcodeDetector({
+        formats: ['ean_13', 'ean_8', 'upc_a', 'upc_e', 'code_128', 'code_39', 'qr_code', 'data_matrix', 'pdf417'],
+      });
+      barcodeIntervalRef.current = setInterval(async () => {
+        if (detectedRef.current || !videoRef.current || videoRef.current.readyState < 2) return;
+        try {
+          const barcodes = await detector.detect(videoRef.current);
+          if (barcodes.length > 0 && !detectedRef.current) {
+            detectedRef.current = true;
+            const bc = barcodes[0];
+            setDetectedBarcode({ type: bc.format, data: bc.rawValue });
+            setTimeout(() => captureFrame({ type: bc.format, data: bc.rawValue }), 300);
+          }
+        } catch {}
+      }, 400);
+    } else {
+      // ── ZXing fallback (iOS Safari + Firefox + all other browsers) ─────────
+      const reader = new BrowserMultiFormatReader();
+      zxingRef.current = reader;
+
+      barcodeIntervalRef.current = setInterval(async () => {
+        if (detectedRef.current || !videoRef.current || videoRef.current.readyState < 2) return;
+        if (!canvasRef.current) return;
+
+        // Draw current frame to canvas then decode
+        const c = canvasRef.current;
+        c.width = videoRef.current.videoWidth || 640;
+        c.height = videoRef.current.videoHeight || 480;
+        const ctx = c.getContext('2d');
+        if (!ctx) return;
+        ctx.drawImage(videoRef.current, 0, 0, c.width, c.height);
+
+        try {
+          const result = await reader.decodeFromCanvas(c);
+          if (result && !detectedRef.current) {
+            detectedRef.current = true;
+            const bc = { type: result.getBarcodeFormat().toString(), data: result.getText() };
+            setDetectedBarcode(bc);
+            setTimeout(() => captureFrame(bc), 300);
+          }
+        } catch (e) {
+          // NotFoundException is normal when no barcode in frame — ignore
+          if (!(e instanceof NotFoundException)) console.warn('ZXing error', e);
         }
-      } catch {}
-    }, 400);
+      }, 500);
+    }
 
     return () => {
       if (barcodeIntervalRef.current) clearInterval(barcodeIntervalRef.current);
+      zxingRef.current = null;
     };
   }, [phase]);
 
@@ -269,9 +308,7 @@ export default function CameraScanner({ visible, onClose, onCapture }: Props) {
       {phase === 'live' && (
         <View style={[styles.hintWrap, { top: MASK_TOP_H + FRAME + 14 }]} pointerEvents="none">
           <Text style={styles.hintText}>
-            {'BarcodeDetector' in window
-              ? 'Point at a barcode to auto-scan, or tap the button to identify any item'
-              : 'Tap the button to photograph an item for AI price estimate'}
+            {'Point at a barcode to auto-scan, or tap the button to identify any item'}
           </Text>
         </View>
       )}
