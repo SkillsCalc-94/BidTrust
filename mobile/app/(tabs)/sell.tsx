@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useCallback } from 'react';
 import {
   View,
   Text,
@@ -84,78 +84,91 @@ export default function SellScreen() {
   const [submitting, setSubmitting] = useState(false);
   const [createdListingId, setCreatedListingId] = useState<string | null>(null);
 
-  async function pickImages() {
+  // Web-only: refs to hidden <input> elements already in the DOM.
+  // Clicking them via ref stays in the user-gesture context, so Safari/iOS
+  // never blocks the file picker or camera sheet.
+  const webLibraryInputRef = useRef<any>(null);
+  const webCameraInputRef = useRef<any>(null);
+  const webScanInputRef = useRef<any>(null);
+
+  // Called by the hidden library <input> onChange
+  const onWebLibraryChange = useCallback((e: any) => {
+    const files: File[] = Array.from(e.target.files || []);
+    e.target.value = ''; // reset so same file can be re-selected
+    if (!files.length) return;
+    const readers = files.slice(0, 10).map(f =>
+      new Promise<string>(res => {
+        const r = new FileReader();
+        r.onload = () => res(r.result as string);
+        r.readAsDataURL(f);
+      })
+    );
+    Promise.all(readers).then(uris => setPhotos(prev => [...prev, ...uris].slice(0, 10)));
+  }, []);
+
+  // Called by the hidden camera <input> onChange
+  const onWebCameraChange = useCallback((e: any) => {
+    const file: File | undefined = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => setPhotos(prev => [reader.result as string, ...prev].slice(0, 10));
+    reader.readAsDataURL(file);
+  }, []);
+
+  // Called by the hidden scan <input> onChange — adds photo AND runs AI
+  const onWebScanChange = useCallback((e: any) => {
+    const file: File | undefined = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      const uri = reader.result as string;
+      setPhotos(prev => [uri, ...prev].slice(0, 10));
+      runAIEstimateWithPhotos([uri]);
+    };
+    reader.readAsDataURL(file);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  function pickImages() {
     if (Platform.OS === 'web') {
-      return new Promise<void>((resolve) => {
-        const input = document.createElement('input');
-        input.type = 'file';
-        input.accept = 'image/*';
-        input.multiple = true;
-        input.onchange = (e: any) => {
-          const files: FileList = e.target.files;
-          if (!files || files.length === 0) { resolve(); return; }
-          const readers: Promise<string>[] = Array.from(files).slice(0, 10).map(
-            (file) =>
-              new Promise<string>((res) => {
-                const reader = new FileReader();
-                reader.onload = () => res(reader.result as string);
-                reader.readAsDataURL(file);
-              })
-          );
-          Promise.all(readers).then((uris) => {
-            setPhotos(prev => [...prev, ...uris].slice(0, 10));
-            resolve();
-          });
-        };
-        input.click();
-      });
-    }
-    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!permission.granted) {
-      Alert.alert('Permission needed', 'Please allow access to your photo library');
+      webLibraryInputRef.current?.click();
       return;
     }
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsMultipleSelection: true,
-      quality: 0.8,
-      selectionLimit: 10,
-    });
-    if (!result.canceled) {
-      const uris = result.assets.map(a => a.uri);
-      setPhotos(prev => [...prev, ...uris].slice(0, 10));
-    }
+    (async () => {
+      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!permission.granted) {
+        Alert.alert('Permission needed', 'Please allow access to your photo library');
+        return;
+      }
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsMultipleSelection: true,
+        quality: 0.8,
+        selectionLimit: 10,
+      });
+      if (!result.canceled) {
+        setPhotos(prev => [...prev, ...result.assets.map(a => a.uri)].slice(0, 10));
+      }
+    })();
   }
 
-  async function takePhoto() {
+  function takePhoto() {
     if (Platform.OS === 'web') {
-      return new Promise<void>((resolve) => {
-        const input = document.createElement('input');
-        input.type = 'file';
-        input.accept = 'image/*';
-        input.capture = 'environment';
-        input.onchange = (e: any) => {
-          const file = e.target.files?.[0];
-          if (!file) { resolve(); return; }
-          const reader = new FileReader();
-          reader.onload = () => {
-            setPhotos(prev => [...prev, reader.result as string].slice(0, 10));
-            resolve();
-          };
-          reader.readAsDataURL(file);
-        };
-        input.click();
-      });
-    }
-    const permission = await ImagePicker.requestCameraPermissionsAsync();
-    if (!permission.granted) {
-      Alert.alert('Permission needed', 'Please allow camera access');
+      webCameraInputRef.current?.click();
       return;
     }
-    const result = await ImagePicker.launchCameraAsync({ quality: 0.8 });
-    if (!result.canceled) {
-      setPhotos(prev => [...prev, result.assets[0].uri].slice(0, 10));
-    }
+    (async () => {
+      const permission = await ImagePicker.requestCameraPermissionsAsync();
+      if (!permission.granted) {
+        Alert.alert('Permission needed', 'Please allow camera access');
+        return;
+      }
+      const result = await ImagePicker.launchCameraAsync({ quality: 0.8 });
+      if (!result.canceled) {
+        setPhotos(prev => [result.assets[0].uri, ...prev].slice(0, 10));
+      }
+    })();
   }
 
   function removePhoto(index: number) {
@@ -198,42 +211,25 @@ export default function SellScreen() {
     await runAIEstimateWithPhotos(photos.slice(0, 5));
   }
 
-  async function quickScanAndEstimate() {
+  function quickScanAndEstimate() {
     if (Platform.OS === 'web') {
-      return new Promise<void>((resolve) => {
-        const input = document.createElement('input');
-        input.type = 'file';
-        input.accept = 'image/*';
-        input.capture = 'environment';
-        input.onchange = async (e: any) => {
-          const file = e.target.files?.[0];
-          if (!file) { resolve(); return; }
-          const reader = new FileReader();
-          reader.onload = async () => {
-            const uri = reader.result as string;
-            setPhotos(prev => [uri, ...prev].slice(0, 10));
-            // slight delay so state updates before running estimate
-            setTimeout(async () => {
-              await runAIEstimateWithPhotos([uri]);
-              resolve();
-            }, 100);
-          };
-          reader.readAsDataURL(file);
-        };
-        input.click();
-      });
-    }
-    const permission = await ImagePicker.requestCameraPermissionsAsync();
-    if (!permission.granted) {
-      Alert.alert('Permission needed', 'Please allow camera access');
+      // Synchronous click on the pre-rendered hidden input — never blocked by Safari
+      webScanInputRef.current?.click();
       return;
     }
-    const result = await ImagePicker.launchCameraAsync({ quality: 0.8 });
-    if (!result.canceled) {
-      const uri = result.assets[0].uri;
-      setPhotos(prev => [uri, ...prev].slice(0, 10));
-      await runAIEstimateWithPhotos([uri]);
-    }
+    (async () => {
+      const permission = await ImagePicker.requestCameraPermissionsAsync();
+      if (!permission.granted) {
+        Alert.alert('Permission needed', 'Please allow camera access to scan items');
+        return;
+      }
+      const result = await ImagePicker.launchCameraAsync({ quality: 0.85 });
+      if (!result.canceled) {
+        const uri = result.assets[0].uri;
+        setPhotos(prev => [uri, ...prev].slice(0, 10));
+        runAIEstimateWithPhotos([uri]);
+      }
+    })();
   }
 
   async function runAIDescribe() {
@@ -950,6 +946,17 @@ export default function SellScreen() {
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+      {/* Hidden web file inputs — rendered in DOM so .click() stays in user-gesture context */}
+      {Platform.OS === 'web' && (
+        <>
+          {/* @ts-ignore */}
+          <input ref={webLibraryInputRef} type="file" accept="image/*" multiple style={{ display: 'none' }} onChange={onWebLibraryChange} />
+          {/* @ts-ignore */}
+          <input ref={webCameraInputRef} type="file" accept="image/*" capture="environment" style={{ display: 'none' }} onChange={onWebCameraChange} />
+          {/* @ts-ignore */}
+          <input ref={webScanInputRef} type="file" accept="image/*" capture="environment" style={{ display: 'none' }} onChange={onWebScanChange} />
+        </>
+      )}
       {renderProgressBar()}
       {step === 1 && renderStep1()}
       {step === 2 && renderStep2()}
