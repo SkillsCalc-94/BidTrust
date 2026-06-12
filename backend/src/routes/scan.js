@@ -209,4 +209,63 @@ router.post('/barcode', authenticate, upload.single('image'), async (req, res) =
   }
 });
 
+// ── POST /api/scan/demo — public, no auth, rate-limited to 10 req/IP/hour ────
+// Used by the landing page "Try AI Scan" demo — no account needed.
+const demoRateMap = new Map(); // ip -> { count, resetAt }
+
+function demoRateLimit(req, res, next) {
+  const ip = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.socket.remoteAddress || 'unknown';
+  const now = Date.now();
+  const entry = demoRateMap.get(ip);
+  if (entry && now < entry.resetAt) {
+    if (entry.count >= 10) {
+      return res.status(429).json({ error: 'Demo limit reached. Sign up for unlimited AI scans!' });
+    }
+    entry.count++;
+  } else {
+    demoRateMap.set(ip, { count: 1, resetAt: now + 60 * 60 * 1000 });
+  }
+  next();
+}
+
+router.post('/demo', demoRateLimit, upload.single('image'), async (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ error: 'Image required' });
+    const imageUrl = req.file.path;
+    const { barcode_data, barcode_type } = req.body;
+
+    let identification = null;
+    let competitorPrices = null;
+
+    if (barcode_data) {
+      const barcodeProduct = await lookupBarcode(barcode_data);
+      if (barcodeProduct) {
+        identification = {
+          product_name: barcodeProduct.title,
+          brand: barcodeProduct.brand,
+          category: barcodeProduct.category || 'Other',
+          condition_estimate: 'good',
+          confidence: 'high',
+          identifying_features: barcodeProduct.description?.slice(0, 120) || '',
+        };
+      }
+    }
+
+    if (!identification) {
+      identification = await identifyFromPhoto(imageUrl);
+    }
+
+    competitorPrices = await fetchCompetitorPrices(
+      identification.product_name,
+      identification.category,
+      imageUrl,
+    ).catch(() => null);
+
+    res.json({ identification, competitor_prices: competitorPrices, image_url: imageUrl });
+  } catch (err) {
+    console.error('Demo scan error:', err);
+    res.status(500).json({ error: 'Scan failed' });
+  }
+});
+
 export default router;

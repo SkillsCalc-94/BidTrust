@@ -60,7 +60,8 @@ export default function SellScreen() {
   const [aiEstimate, setAiEstimate] = useState<AIEstimate | null>(null);
   const [aiError, setAiError] = useState('');
 
-  // Qualifying questions for AI
+  // Qualifying questions — shown only when AI can't identify the item confidently
+  const [showQualifyingQuestions, setShowQualifyingQuestions] = useState(false);
   const [originalPrice, setOriginalPrice] = useState('');
   const [q1Defects, setQ1Defects] = useState('');
   const [q2Accessories, setQ2Accessories] = useState('');
@@ -252,6 +253,44 @@ export default function SellScreen() {
   }
 
   // Called by CameraScanner once user captures a photo (with or without barcode)
+  function buildEstimateFromCompetitorPrices(cp: any, id: any): AIEstimate {
+    const sweet = cp.best_sell_price ?? 0;
+    return {
+      spend_price: cp.retail_price_new ?? null,
+      buyers_value: {
+        low: cp.secondhand_prices?.fair ?? sweet * 0.7,
+        mid: cp.secondhand_prices?.good ?? sweet * 0.85,
+        high: cp.secondhand_prices?.excellent ?? sweet,
+        insight: cp.price_insight || 'Based on SA secondhand market research.',
+      },
+      current_value: {
+        low: cp.secondhand_prices?.fair ?? sweet * 0.65,
+        mid: cp.secondhand_prices?.good ?? sweet * 0.8,
+        high: cp.secondhand_prices?.excellent ?? sweet * 0.95,
+        insight: `Retail new: R${cp.retail_price_new?.toLocaleString('en-ZA') ?? 'N/A'}. Demand: ${cp.demand_level ?? 'medium'}.`,
+      },
+      sell_price_range: {
+        low: cp.secondhand_prices?.fair ?? sweet * 0.7,
+        high: cp.secondhand_prices?.excellent ?? sweet,
+        sweet_spot: sweet,
+      },
+      confidence: id?.confidence || 'medium',
+      depreciation_pct: cp.retail_price_new && sweet
+        ? Math.round((1 - sweet / cp.retail_price_new) * 100)
+        : null,
+      condition_assessment: id?.identifying_features || '',
+      reasoning: cp.price_insight || '',
+      market_trend: cp.market_trend || 'stable',
+      suggested_starting_price: cp.secondhand_prices?.fair ?? sweet * 0.7,
+      suggested_buy_now_price: cp.secondhand_prices?.excellent ?? sweet,
+      comparable_items: (cp.competitor_listings || []).map((l: any) => ({
+        name: id?.product_name || 'Similar item',
+        price: l.price_low,
+        source: l.platform,
+      })),
+    };
+  }
+
   async function handleScanResult(result: ScanResult) {
     setScannerOpen(false);
     const { imageUri, barcode } = result;
@@ -259,11 +298,11 @@ export default function SellScreen() {
     setPhotos(prev => [imageUri, ...prev].slice(0, 10));
     setAiLoading(true);
     setAiError('');
+    setShowQualifyingQuestions(false);
 
     try {
       const fd = new FormData();
       if (Platform.OS === 'web') {
-        // Web: imageUri is a base64 data URL from canvas capture
         const [meta, b64] = imageUri.split(',');
         const mime = meta.match(/:(.*?);/)?.[1] || 'image/jpeg';
         const bytes = atob(b64);
@@ -276,108 +315,32 @@ export default function SellScreen() {
       }
 
       if (barcode) {
-        // Barcode path — lookup product + competitor prices
         fd.append('barcode_data', barcode.data);
         fd.append('barcode_type', barcode.type);
-        const scanData = await api.postFormData<any>('/scan/barcode', fd);
+      }
 
-        // Auto-fill listing fields if product identified
-        const id = scanData.identification;
-        if (id?.product_name && !title) setTitle(id.product_name);
-        if (id?.category && !category) setCategory(id.category);
-        if (id?.condition_estimate && !condition) setCondition(id.condition_estimate);
+      const endpoint = barcode ? '/scan/barcode' : '/scan/identify';
+      const scanData = await api.postFormData<any>(endpoint, fd);
 
-        // Build AI estimate from competitor price data
-        if (scanData.competitor_prices) {
-          const cp = scanData.competitor_prices;
-          const estimate: AIEstimate = {
-            spend_price: null,
-            buyers_value: {
-              low: cp.secondhand_prices?.fair ?? cp.best_sell_price * 0.7,
-              mid: cp.secondhand_prices?.good ?? cp.best_sell_price * 0.85,
-              high: cp.secondhand_prices?.excellent ?? cp.best_sell_price,
-              insight: cp.price_insight || 'Based on SA secondhand market research.',
-            },
-            current_value: {
-              low: cp.secondhand_prices?.fair ?? cp.best_sell_price * 0.65,
-              mid: cp.secondhand_prices?.good ?? cp.best_sell_price * 0.80,
-              high: cp.secondhand_prices?.excellent ?? cp.best_sell_price * 0.95,
-              insight: `Retail new: R${cp.retail_price_new?.toLocaleString('en-ZA') ?? 'N/A'}. Demand: ${cp.demand_level ?? 'medium'}.`,
-            },
-            sell_price_range: {
-              low: cp.secondhand_prices?.fair ?? cp.best_sell_price * 0.7,
-              high: cp.secondhand_prices?.excellent ?? cp.best_sell_price,
-              sweet_spot: cp.best_sell_price,
-            },
-            confidence: 'high',
-            depreciation_pct: cp.retail_price_new
-              ? Math.round((1 - cp.best_sell_price / cp.retail_price_new) * 100)
-              : null,
-            condition_assessment: id?.identifying_features || '',
-            reasoning: cp.price_insight || '',
-            market_trend: cp.market_trend || 'stable',
-            suggested_starting_price: cp.secondhand_prices?.fair ?? cp.best_sell_price * 0.7,
-            suggested_buy_now_price: cp.secondhand_prices?.excellent ?? cp.best_sell_price,
-            comparable_items: (cp.competitor_listings || []).map((l: any) => ({
-              name: id?.product_name || 'Similar item',
-              price: l.price_low,
-              source: l.platform,
-            })),
-          };
-          setAiEstimate(estimate);
-        } else {
-          // Fallback: run standard AI estimate
-          await runAIEstimateWithPhotos([imageUri]);
-        }
+      const id = scanData.identification;
+      const confidence = id?.confidence || 'low';
+
+      // Auto-fill listing fields
+      if (id?.product_name && !title) setTitle(id.product_name);
+      if (id?.category && !category) setCategory(id.category);
+      if (id?.condition_estimate && id.condition_estimate !== 'unknown' && !condition)
+        setCondition(id.condition_estimate);
+
+      if (confidence === 'high' && scanData.competitor_prices) {
+        // High confidence + competitor data → immediate estimate, no questions needed
+        setAiEstimate(buildEstimateFromCompetitorPrices(scanData.competitor_prices, id));
+      } else if (confidence === 'high') {
+        // High confidence but no competitor prices → run photo-based AI estimate
+        await runAIEstimateWithPhotos([imageUri]);
       } else {
-        // No barcode — AI vision identifies item + competitor prices
-        const scanData = await api.postFormData<any>('/scan/identify', fd);
-
-        const id = scanData.identification;
-        if (id?.product_name && !title) setTitle(id.product_name);
-        if (id?.category && !category) setCategory(id.category);
-        if (id?.condition_estimate && !condition) setCondition(id.condition_estimate);
-
-        if (scanData.competitor_prices) {
-          const cp = scanData.competitor_prices;
-          const estimate: AIEstimate = {
-            spend_price: null,
-            buyers_value: {
-              low: cp.secondhand_prices?.fair ?? cp.best_sell_price * 0.7,
-              mid: cp.secondhand_prices?.good ?? cp.best_sell_price * 0.85,
-              high: cp.secondhand_prices?.excellent ?? cp.best_sell_price,
-              insight: cp.price_insight || 'Based on SA market research.',
-            },
-            current_value: {
-              low: cp.secondhand_prices?.fair ?? cp.best_sell_price * 0.65,
-              mid: cp.secondhand_prices?.good ?? cp.best_sell_price * 0.80,
-              high: cp.secondhand_prices?.excellent ?? cp.best_sell_price * 0.95,
-              insight: `Retail: R${cp.retail_price_new?.toLocaleString('en-ZA') ?? 'N/A'} new. Demand: ${cp.demand_level ?? 'medium'}.`,
-            },
-            sell_price_range: {
-              low: cp.secondhand_prices?.fair ?? cp.best_sell_price * 0.7,
-              high: cp.secondhand_prices?.excellent ?? cp.best_sell_price,
-              sweet_spot: cp.best_sell_price,
-            },
-            confidence: id?.confidence || 'medium',
-            depreciation_pct: cp.retail_price_new
-              ? Math.round((1 - cp.best_sell_price / cp.retail_price_new) * 100)
-              : null,
-            condition_assessment: id?.identifying_features || '',
-            reasoning: cp.price_insight || '',
-            market_trend: cp.market_trend || 'stable',
-            suggested_starting_price: cp.secondhand_prices?.fair ?? cp.best_sell_price * 0.7,
-            suggested_buy_now_price: cp.secondhand_prices?.excellent ?? cp.best_sell_price,
-            comparable_items: (cp.competitor_listings || []).map((l: any) => ({
-              name: id?.product_name || 'Similar item',
-              price: l.price_low,
-              source: l.platform,
-            })),
-          };
-          setAiEstimate(estimate);
-        } else {
-          await runAIEstimateWithPhotos([imageUri]);
-        }
+        // Low/medium confidence — AI couldn't fully identify item
+        // Show qualifying questions + ask for 3 photos to improve estimate
+        setShowQualifyingQuestions(true);
       }
     } catch (err: any) {
       setAiError(err.message || 'Scan failed — please try again');
@@ -472,6 +435,7 @@ export default function SellScreen() {
     setPhotos([]);
     setAiEstimate(null);
     setAiError('');
+    setShowQualifyingQuestions(false);
     setOriginalPrice('');
     setQ1Defects('');
     setQ2Accessories('');
@@ -616,9 +580,33 @@ export default function SellScreen() {
             </View>
           </View>
 
-          {/* Qualifying questions */}
-          <View style={styles.qualifySection}>
-            <Text style={styles.qualifyTitle}>3 Quick Questions → Better Estimate</Text>
+          {/* Qualifying questions — always visible for manual estimate, highlighted when AI couldn't identify */}
+          <View style={[styles.qualifySection, showQualifyingQuestions && styles.qualifySectionHighlighted]}>
+            {showQualifyingQuestions ? (
+              <View style={styles.cantIdentifyBanner}>
+                <Ionicons name="help-circle-outline" size={22} color="#f59e0b" />
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.cantIdentifyTitle}>Couldn't fully identify this item</Text>
+                  <Text style={styles.cantIdentifyDesc}>
+                    Add 3 clear photos and answer the questions below — AI will use them to produce an accurate price estimate.
+                  </Text>
+                </View>
+              </View>
+            ) : (
+              <Text style={styles.qualifyTitle}>3 Quick Questions → Better Estimate</Text>
+            )}
+
+            {/* Photo count indicator when questions are required */}
+            {showQualifyingQuestions && (
+              <View style={styles.photoCountRow}>
+                <View style={[styles.photoCountBadge, photos.length >= 3 ? styles.photoCountDone : styles.photoCountNeeded]}>
+                  <Ionicons name={photos.length >= 3 ? 'checkmark-circle' : 'camera-outline'} size={16} color={photos.length >= 3 ? '#10b981' : '#f59e0b'} />
+                  <Text style={[styles.photoCountText, photos.length >= 3 && { color: '#10b981' }]}>
+                    {photos.length >= 3 ? `${photos.length} photos added ✓` : `${photos.length}/3 photos — add ${3 - photos.length} more`}
+                  </Text>
+                </View>
+              </View>
+            )}
 
             <View style={styles.qualifyField}>
               <Text style={styles.qualifyLabel}>💰 What did you originally pay? (R)</Text>
@@ -1968,6 +1956,27 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(249,115,22,0.15)',
     gap: 10,
   },
+  qualifySectionHighlighted: {
+    borderColor: '#f59e0b',
+    backgroundColor: 'rgba(245,158,11,0.05)',
+  },
+  cantIdentifyBanner: {
+    flexDirection: 'row', alignItems: 'flex-start', gap: 10,
+    backgroundColor: 'rgba(245,158,11,0.1)',
+    borderRadius: 10, padding: 12,
+    borderWidth: 1, borderColor: 'rgba(245,158,11,0.25)',
+  },
+  cantIdentifyTitle: { color: '#f59e0b', fontSize: 13, fontWeight: '700', marginBottom: 3 },
+  cantIdentifyDesc: { color: '#888', fontSize: 12, lineHeight: 17 },
+  photoCountRow: { marginBottom: 4 },
+  photoCountBadge: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6,
+    alignSelf: 'flex-start',
+  },
+  photoCountNeeded: { backgroundColor: 'rgba(245,158,11,0.12)', borderWidth: 1, borderColor: 'rgba(245,158,11,0.3)' },
+  photoCountDone: { backgroundColor: 'rgba(16,185,129,0.12)', borderWidth: 1, borderColor: 'rgba(16,185,129,0.3)' },
+  photoCountText: { color: '#f59e0b', fontSize: 12, fontWeight: '600' },
   qualifyTitle: {
     color: '#f97316',
     fontSize: 11,

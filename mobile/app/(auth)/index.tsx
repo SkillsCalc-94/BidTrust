@@ -12,6 +12,7 @@ import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import Tilt3D from '../../components/Tilt3D';
 import SplineScene from '../../components/SplineScene';
+import ScanHero from '../../components/ScanHero';
 
 const { width } = Dimensions.get('window');
 
@@ -216,6 +217,11 @@ export default function LandingScreen() {
           </TouchableOpacity>
         </View>
 
+        {/* ── AI SCAN HERO — the big selling point ── */}
+        <View style={styles.scanHeroSection}>
+          <ScanHero />
+        </View>
+
         {/* How it works */}
         <View style={styles.section}>
           <Text style={styles.sectionLabel}>HOW IT WORKS</Text>
@@ -277,6 +283,12 @@ export default function LandingScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#0d0d14' },
+  scanHeroSection: {
+    marginHorizontal: 0,
+    borderTopWidth: 1,
+    borderTopColor: '#1e1e30',
+    backgroundColor: '#0d0d14',
+  },
 
   // Hero
   hero: {
