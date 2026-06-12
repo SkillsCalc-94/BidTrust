@@ -12,6 +12,7 @@ import {
   Platform,
   Switch,
   Dimensions,
+  Linking,
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { router } from 'expo-router';
@@ -130,45 +131,63 @@ export default function SellScreen() {
     reader.readAsDataURL(file);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  function pickImages() {
+  async function pickImages() {
     if (Platform.OS === 'web') {
       webLibraryInputRef.current?.click();
       return;
     }
-    (async () => {
-      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (!permission.granted) {
+    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!permission.granted) {
+      if (!permission.canAskAgain) {
+        Alert.alert(
+          'Permission Required',
+          'Photo library access was denied. Please enable it in Settings.',
+          [
+            { text: 'Cancel', style: 'cancel' },
+            { text: 'Open Settings', onPress: () => Linking.openSettings() },
+          ]
+        );
+      } else {
         Alert.alert('Permission needed', 'Please allow access to your photo library');
-        return;
       }
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        allowsMultipleSelection: true,
-        quality: 0.8,
-        selectionLimit: 10,
-      });
-      if (!result.canceled) {
-        setPhotos(prev => [...prev, ...result.assets.map(a => a.uri)].slice(0, 10));
-      }
-    })();
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsMultipleSelection: true,
+      quality: 0.8,
+      selectionLimit: 10,
+    });
+    if (!result.canceled) {
+      setPhotos(prev => [...prev, ...result.assets.map(a => a.uri)].slice(0, 10));
+    }
   }
 
-  function takePhoto() {
+  async function takePhoto() {
     if (Platform.OS === 'web') {
       webCameraInputRef.current?.click();
       return;
     }
-    (async () => {
-      const permission = await ImagePicker.requestCameraPermissionsAsync();
-      if (!permission.granted) {
+    const permission = await ImagePicker.requestCameraPermissionsAsync();
+    if (!permission.granted) {
+      if (!permission.canAskAgain) {
+        Alert.alert(
+          'Camera Access Required',
+          'Camera permission was denied. Please enable it in Settings to take photos.',
+          [
+            { text: 'Cancel', style: 'cancel' },
+            { text: 'Open Settings', onPress: () => Linking.openSettings() },
+          ]
+        );
+      } else {
         Alert.alert('Permission needed', 'Please allow camera access');
-        return;
       }
-      const result = await ImagePicker.launchCameraAsync({ quality: 0.8 });
-      if (!result.canceled) {
-        setPhotos(prev => [result.assets[0].uri, ...prev].slice(0, 10));
-      }
-    })();
+      return;
+    }
+    const result = await ImagePicker.launchCameraAsync({ quality: 0.8 });
+    if (!result.canceled) {
+      setPhotos(prev => [result.assets[0].uri, ...prev].slice(0, 10));
+    }
   }
 
   function removePhoto(index: number) {
@@ -182,8 +201,20 @@ export default function SellScreen() {
     try {
       const formData = new FormData();
       photoList.slice(0, 5).forEach((uri, i) => {
-        const ext = uri.split('.').pop()?.split(';')[0] || 'jpg';
-        (formData as any).append('images', { uri, type: `image/${ext}`, name: `photo_${i}.${ext}` } as any);
+        if (Platform.OS === 'web') {
+          // Web: uri is a base64 data URL — convert to Blob for fetch FormData
+          const [meta, b64] = uri.split(',');
+          const mime = meta.match(/:(.*?);/)?.[1] || 'image/jpeg';
+          const bytes = atob(b64);
+          const arr = new Uint8Array(bytes.length);
+          for (let j = 0; j < bytes.length; j++) arr[j] = bytes.charCodeAt(j);
+          const blob = new Blob([arr], { type: mime });
+          const ext = mime.split('/')[1] || 'jpg';
+          formData.append('images', blob, `photo_${i}.${ext}`);
+        } else {
+          const ext = uri.split('.').pop()?.split(';')[0] || 'jpg';
+          (formData as any).append('images', { uri, type: `image/${ext}`, name: `photo_${i}.${ext}` } as any);
+        }
       });
       formData.append('item_name', title || 'Unknown item');
       formData.append('condition', condition || 'good');
@@ -211,25 +242,40 @@ export default function SellScreen() {
     await runAIEstimateWithPhotos(photos.slice(0, 5));
   }
 
-  function quickScanAndEstimate() {
+  async function quickScanAndEstimate() {
     if (Platform.OS === 'web') {
       // Synchronous click on the pre-rendered hidden input — never blocked by Safari
       webScanInputRef.current?.click();
       return;
     }
-    (async () => {
-      const permission = await ImagePicker.requestCameraPermissionsAsync();
-      if (!permission.granted) {
-        Alert.alert('Permission needed', 'Please allow camera access to scan items');
-        return;
+    const permission = await ImagePicker.requestCameraPermissionsAsync();
+    if (!permission.granted) {
+      if (!permission.canAskAgain) {
+        Alert.alert(
+          'Camera Access Required',
+          'BidTrust needs camera access to scan items and get AI price estimates. Please enable it in Settings.',
+          [
+            { text: 'Cancel', style: 'cancel' },
+            { text: 'Open Settings', onPress: () => Linking.openSettings() },
+          ]
+        );
+      } else {
+        Alert.alert(
+          'Camera Permission',
+          'Please allow camera access to scan items for AI price estimates.'
+        );
       }
-      const result = await ImagePicker.launchCameraAsync({ quality: 0.85 });
-      if (!result.canceled) {
-        const uri = result.assets[0].uri;
-        setPhotos(prev => [uri, ...prev].slice(0, 10));
-        runAIEstimateWithPhotos([uri]);
-      }
-    })();
+      return;
+    }
+    const result = await ImagePicker.launchCameraAsync({
+      quality: 0.85,
+      allowsEditing: false,
+    });
+    if (!result.canceled) {
+      const uri = result.assets[0].uri;
+      setPhotos(prev => [uri, ...prev].slice(0, 10));
+      runAIEstimateWithPhotos([uri]);
+    }
   }
 
   async function runAIDescribe() {

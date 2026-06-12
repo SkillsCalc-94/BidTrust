@@ -14,7 +14,17 @@
     "ios": { "supportsTablet": true, "bundleIdentifier": "com.bidtrust.app" },
     "android": { "adaptiveIcon": { "backgroundColor": "#1a1a2e" }, "package": "com.bidtrust.app" },
     "web": { "bundler": "metro", "output": "single" },
-    "plugins": ["expo-router", "expo-secure-store"],
+    "plugins": [
+      "expo-router",
+      "expo-secure-store",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "BidTrust needs photo access to add listing images.",
+          "cameraPermission": "BidTrust needs camera access to scan and photograph items for sale."
+        }
+      ]
+    ],
     "experiments": { "typedRoutes": true }
   }
 }
