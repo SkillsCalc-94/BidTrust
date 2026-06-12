@@ -335,7 +335,7 @@ export default function CameraScanner({ visible, onClose, onCapture }: Props) {
 
 const styles = StyleSheet.create({
   container: {
-    position: 'absolute' as any,
+    position: 'fixed' as any,   // fixed escapes ScrollView clipping on web
     top: 0, left: 0, right: 0, bottom: 0,
     zIndex: 9999,
     backgroundColor: '#000',

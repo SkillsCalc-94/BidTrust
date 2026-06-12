@@ -11,7 +11,6 @@ import {
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import Tilt3D from '../../components/Tilt3D';
-import SplineScene from '../../components/SplineScene';
 import ScanHero from '../../components/ScanHero';
 
 const { width } = Dimensions.get('window');
@@ -168,12 +167,6 @@ export default function LandingScreen() {
           <Text style={styles.sectionDesc}>
             Browse live auctions, scan items, manage bids and track your listings — all from one app.
           </Text>
-
-          {/* 3D Spline scene — web only */}
-          <SplineScene
-            scene="https://prod.spline.design/kZDDjO5HuC9GJUM2/scene.splinecode"
-            height={360}
-          />
 
           {/* Phone mockup */}
           <View style={styles.mockupRow}>
