@@ -8,6 +8,7 @@ import bidsRoutes from './routes/bids.js';
 import offersRoutes from './routes/offers.js';
 import paymentsRoutes from './routes/payments.js';
 import aiRoutes from './routes/ai.js';
+import scanRoutes from './routes/scan.js';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -35,6 +36,7 @@ app.use('/api/bids', bidsRoutes);
 app.use('/api/offers', offersRoutes);
 app.use('/api/payments', paymentsRoutes);
 app.use('/api/ai', aiRoutes);
+app.use('/api/scan', scanRoutes);
 
 // 404 handler
 app.use((req, res) => {

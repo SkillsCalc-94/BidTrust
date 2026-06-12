@@ -23,6 +23,12 @@
           "photosPermission": "BidTrust needs photo access to add listing images.",
           "cameraPermission": "BidTrust needs camera access to scan and photograph items for sale."
         }
+      ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "BidTrust uses the camera to scan barcodes and photograph items for AI price estimates."
+        }
       ]
     ],
     "experiments": { "typedRoutes": true }

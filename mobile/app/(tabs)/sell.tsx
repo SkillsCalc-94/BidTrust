@@ -19,6 +19,7 @@ import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import api from '../../lib/api';
 import AIEstimateCard, { AIEstimate } from '../../components/AIEstimateCard';
+import CameraScanner, { ScanResult } from '../../components/CameraScanner';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -84,6 +85,9 @@ export default function SellScreen() {
   // Submission
   const [submitting, setSubmitting] = useState(false);
   const [createdListingId, setCreatedListingId] = useState<string | null>(null);
+
+  // Camera scanner modal (native only — web falls back to file input)
+  const [scannerOpen, setScannerOpen] = useState(false);
 
   // Web-only: refs to hidden <input> elements already in the DOM.
   // Clicking them via ref stays in the user-gesture context, so Safari/iOS
@@ -242,39 +246,139 @@ export default function SellScreen() {
     await runAIEstimateWithPhotos(photos.slice(0, 5));
   }
 
-  async function quickScanAndEstimate() {
+  function quickScanAndEstimate() {
     if (Platform.OS === 'web') {
-      // Synchronous click on the pre-rendered hidden input — never blocked by Safari
+      // Web: use hidden file input (synchronous — never blocked by browser gesture policy)
       webScanInputRef.current?.click();
       return;
     }
-    const permission = await ImagePicker.requestCameraPermissionsAsync();
-    if (!permission.granted) {
-      if (!permission.canAskAgain) {
-        Alert.alert(
-          'Camera Access Required',
-          'BidTrust needs camera access to scan items and get AI price estimates. Please enable it in Settings.',
-          [
-            { text: 'Cancel', style: 'cancel' },
-            { text: 'Open Settings', onPress: () => Linking.openSettings() },
-          ]
-        );
+    // Native: open the in-app live camera scanner
+    setScannerOpen(true);
+  }
+
+  // Called by CameraScanner once user captures a photo (with or without barcode)
+  async function handleScanResult(result: ScanResult) {
+    setScannerOpen(false);
+    const { imageUri, barcode } = result;
+
+    setPhotos(prev => [imageUri, ...prev].slice(0, 10));
+    setAiLoading(true);
+    setAiError('');
+
+    try {
+      // Build a native FormData for the backend
+      const fd = new FormData();
+      const ext = imageUri.split('.').pop() || 'jpg';
+      (fd as any).append('image', { uri: imageUri, type: `image/${ext}`, name: `scan.${ext}` } as any);
+
+      if (barcode) {
+        // Barcode path — lookup product + competitor prices
+        fd.append('barcode_data', barcode.data);
+        fd.append('barcode_type', barcode.type);
+        const scanData = await api.postFormData<any>('/scan/barcode', fd);
+
+        // Auto-fill listing fields if product identified
+        const id = scanData.identification;
+        if (id?.product_name && !title) setTitle(id.product_name);
+        if (id?.category && !category) setCategory(id.category);
+        if (id?.condition_estimate && !condition) setCondition(id.condition_estimate);
+
+        // Build AI estimate from competitor price data
+        if (scanData.competitor_prices) {
+          const cp = scanData.competitor_prices;
+          const estimate: AIEstimate = {
+            spend_price: null,
+            buyers_value: {
+              low: cp.secondhand_prices?.fair ?? cp.best_sell_price * 0.7,
+              mid: cp.secondhand_prices?.good ?? cp.best_sell_price * 0.85,
+              high: cp.secondhand_prices?.excellent ?? cp.best_sell_price,
+              insight: cp.price_insight || 'Based on SA secondhand market research.',
+            },
+            current_value: {
+              low: cp.secondhand_prices?.fair ?? cp.best_sell_price * 0.65,
+              mid: cp.secondhand_prices?.good ?? cp.best_sell_price * 0.80,
+              high: cp.secondhand_prices?.excellent ?? cp.best_sell_price * 0.95,
+              insight: `Retail new: R${cp.retail_price_new?.toLocaleString('en-ZA') ?? 'N/A'}. Demand: ${cp.demand_level ?? 'medium'}.`,
+            },
+            sell_price_range: {
+              low: cp.secondhand_prices?.fair ?? cp.best_sell_price * 0.7,
+              high: cp.secondhand_prices?.excellent ?? cp.best_sell_price,
+              sweet_spot: cp.best_sell_price,
+            },
+            confidence: 'high',
+            depreciation_pct: cp.retail_price_new
+              ? Math.round((1 - cp.best_sell_price / cp.retail_price_new) * 100)
+              : null,
+            condition_assessment: id?.identifying_features || '',
+            reasoning: cp.price_insight || '',
+            market_trend: cp.market_trend || 'stable',
+            suggested_starting_price: cp.secondhand_prices?.fair ?? cp.best_sell_price * 0.7,
+            suggested_buy_now_price: cp.secondhand_prices?.excellent ?? cp.best_sell_price,
+            comparable_items: (cp.competitor_listings || []).map((l: any) => ({
+              name: id?.product_name || 'Similar item',
+              price: l.price_low,
+              source: l.platform,
+            })),
+          };
+          setAiEstimate(estimate);
+        } else {
+          // Fallback: run standard AI estimate
+          await runAIEstimateWithPhotos([imageUri]);
+        }
       } else {
-        Alert.alert(
-          'Camera Permission',
-          'Please allow camera access to scan items for AI price estimates.'
-        );
+        // No barcode — AI vision identifies item + competitor prices
+        const scanData = await api.postFormData<any>('/scan/identify', fd);
+
+        const id = scanData.identification;
+        if (id?.product_name && !title) setTitle(id.product_name);
+        if (id?.category && !category) setCategory(id.category);
+        if (id?.condition_estimate && !condition) setCondition(id.condition_estimate);
+
+        if (scanData.competitor_prices) {
+          const cp = scanData.competitor_prices;
+          const estimate: AIEstimate = {
+            spend_price: null,
+            buyers_value: {
+              low: cp.secondhand_prices?.fair ?? cp.best_sell_price * 0.7,
+              mid: cp.secondhand_prices?.good ?? cp.best_sell_price * 0.85,
+              high: cp.secondhand_prices?.excellent ?? cp.best_sell_price,
+              insight: cp.price_insight || 'Based on SA market research.',
+            },
+            current_value: {
+              low: cp.secondhand_prices?.fair ?? cp.best_sell_price * 0.65,
+              mid: cp.secondhand_prices?.good ?? cp.best_sell_price * 0.80,
+              high: cp.secondhand_prices?.excellent ?? cp.best_sell_price * 0.95,
+              insight: `Retail: R${cp.retail_price_new?.toLocaleString('en-ZA') ?? 'N/A'} new. Demand: ${cp.demand_level ?? 'medium'}.`,
+            },
+            sell_price_range: {
+              low: cp.secondhand_prices?.fair ?? cp.best_sell_price * 0.7,
+              high: cp.secondhand_prices?.excellent ?? cp.best_sell_price,
+              sweet_spot: cp.best_sell_price,
+            },
+            confidence: id?.confidence || 'medium',
+            depreciation_pct: cp.retail_price_new
+              ? Math.round((1 - cp.best_sell_price / cp.retail_price_new) * 100)
+              : null,
+            condition_assessment: id?.identifying_features || '',
+            reasoning: cp.price_insight || '',
+            market_trend: cp.market_trend || 'stable',
+            suggested_starting_price: cp.secondhand_prices?.fair ?? cp.best_sell_price * 0.7,
+            suggested_buy_now_price: cp.secondhand_prices?.excellent ?? cp.best_sell_price,
+            comparable_items: (cp.competitor_listings || []).map((l: any) => ({
+              name: id?.product_name || 'Similar item',
+              price: l.price_low,
+              source: l.platform,
+            })),
+          };
+          setAiEstimate(estimate);
+        } else {
+          await runAIEstimateWithPhotos([imageUri]);
+        }
       }
-      return;
-    }
-    const result = await ImagePicker.launchCameraAsync({
-      quality: 0.85,
-      allowsEditing: false,
-    });
-    if (!result.canceled) {
-      const uri = result.assets[0].uri;
-      setPhotos(prev => [uri, ...prev].slice(0, 10));
-      runAIEstimateWithPhotos([uri]);
+    } catch (err: any) {
+      setAiError(err.message || 'Scan failed — please try again');
+    } finally {
+      setAiLoading(false);
     }
   }
 
@@ -991,25 +1095,36 @@ export default function SellScreen() {
   );
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-      {/* Hidden web file inputs — rendered in DOM so .click() stays in user-gesture context */}
-      {Platform.OS === 'web' && (
-        <>
-          {/* @ts-ignore */}
-          <input ref={webLibraryInputRef} type="file" accept="image/*" multiple style={{ display: 'none' }} onChange={onWebLibraryChange} />
-          {/* @ts-ignore */}
-          <input ref={webCameraInputRef} type="file" accept="image/*" capture="environment" style={{ display: 'none' }} onChange={onWebCameraChange} />
-          {/* @ts-ignore */}
-          <input ref={webScanInputRef} type="file" accept="image/*" capture="environment" style={{ display: 'none' }} onChange={onWebScanChange} />
-        </>
+    <>
+      {/* Native camera scanner modal */}
+      {Platform.OS !== 'web' && (
+        <CameraScanner
+          visible={scannerOpen}
+          onClose={() => setScannerOpen(false)}
+          onCapture={handleScanResult}
+        />
       )}
-      {renderProgressBar()}
-      {step === 1 && renderStep1()}
-      {step === 2 && renderStep2()}
-      {step === 3 && renderStep3()}
-      {step === 4 && renderStep4()}
-      {step === 5 && renderSuccess()}
-    </ScrollView>
+
+      <ScrollView style={styles.container} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+        {/* Hidden web file inputs — rendered in DOM so .click() stays in user-gesture context */}
+        {Platform.OS === 'web' && (
+          <>
+            {/* @ts-ignore */}
+            <input ref={webLibraryInputRef} type="file" accept="image/*" multiple style={{ display: 'none' }} onChange={onWebLibraryChange} />
+            {/* @ts-ignore */}
+            <input ref={webCameraInputRef} type="file" accept="image/*" capture="environment" style={{ display: 'none' }} onChange={onWebCameraChange} />
+            {/* @ts-ignore */}
+            <input ref={webScanInputRef} type="file" accept="image/*" capture="environment" style={{ display: 'none' }} onChange={onWebScanChange} />
+          </>
+        )}
+        {renderProgressBar()}
+        {step === 1 && renderStep1()}
+        {step === 2 && renderStep2()}
+        {step === 3 && renderStep3()}
+        {step === 4 && renderStep4()}
+        {step === 5 && renderSuccess()}
+      </ScrollView>
+    </>
   );
 }
 
