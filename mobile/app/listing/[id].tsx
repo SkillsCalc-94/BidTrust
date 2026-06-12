@@ -110,7 +110,7 @@ export default function ListingDetailScreen() {
     }
     const amount = parseFloat(bidAmount);
     if (listing && amount <= listing.current_price) {
-      setBidError(`Bid must be higher than current price: $${listing.current_price.toFixed(2)}`);
+      setBidError(`Bid must be higher than current price: R${listing.current_price.toFixed(2)}`);
       return;
     }
     setBidError('');
@@ -119,7 +119,7 @@ export default function ListingDetailScreen() {
       await api.post(`/bids/${id}`, { amount });
       setBidModalVisible(false);
       setBidAmount('');
-      Alert.alert('Bid Placed!', `Your bid of $${amount.toFixed(2)} has been placed.`);
+      Alert.alert('Bid Placed!', `Your bid of R${amount.toFixed(2)} has been placed.`);
       fetchListing(true);
     } catch (err: any) {
       setBidError(err.message || 'Failed to place bid');
@@ -278,7 +278,7 @@ export default function ListingDetailScreen() {
           <View style={styles.aiEstimateCard}>
             <Text style={styles.aiEstimateLabel}>✨ AI Estimated Value</Text>
             <Text style={styles.aiEstimateRange}>
-              ${listing.ai_estimated_value_low?.toFixed(0)} – ${listing.ai_estimated_value_high?.toFixed(0)}
+              R{listing.ai_estimated_value_low?.toFixed(0)} – R{listing.ai_estimated_value_high?.toFixed(0)}
             </Text>
           </View>
         )}
@@ -288,7 +288,7 @@ export default function ListingDetailScreen() {
           <View style={styles.pricingRow}>
             <View>
               <Text style={styles.currentPriceLabel}>Current Price</Text>
-              <Text style={styles.currentPrice}>${listing.current_price?.toFixed(2)}</Text>
+              <Text style={styles.currentPrice}>R{listing.current_price?.toFixed(2)}</Text>
               <Text style={styles.bidCount}>{listing.bid_count} bid{listing.bid_count !== 1 ? 's' : ''}</Text>
             </View>
             <View style={styles.timerContainer}>
@@ -300,7 +300,7 @@ export default function ListingDetailScreen() {
           {listing.buy_now_price && isActive && !auctionEnded && (
             <View style={styles.buyNowRow}>
               <Text style={styles.buyNowLabel}>Buy Now:</Text>
-              <Text style={styles.buyNowPrice}>${listing.buy_now_price.toFixed(2)}</Text>
+              <Text style={styles.buyNowPrice}>R{listing.buy_now_price.toFixed(2)}</Text>
             </View>
           )}
         </View>
@@ -322,9 +322,9 @@ export default function ListingDetailScreen() {
             {listing.buy_now_price && (
               <TouchableOpacity
                 style={styles.buyNowBtn}
-                onPress={() => Alert.alert('Buy Now', `Purchase for $${listing.buy_now_price?.toFixed(2)}?\n\nPayment flow coming soon.`)}
+                onPress={() => Alert.alert('Buy Now', `Purchase for R${listing.buy_now_price?.toFixed(2)}?\n\nConfirm purchase? Escrow payment will be held until delivery.`)}
               >
-                <Text style={styles.buyNowBtnText}>Buy Now ${listing.buy_now_price.toFixed(2)}</Text>
+                <Text style={styles.buyNowBtnText}>Buy Now R{listing.buy_now_price.toFixed(2)}</Text>
               </TouchableOpacity>
             )}
 
@@ -356,7 +356,7 @@ export default function ListingDetailScreen() {
               <View key={bid.id} style={[styles.bidRow, i === 0 && styles.bidRowTop]}>
                 <Text style={styles.bidBidderName}>{bid.bidder?.display_name || 'Anonymous'}</Text>
                 <Text style={[styles.bidAmount, i === 0 && styles.bidAmountTop]}>
-                  ${bid.amount.toFixed(2)}
+                  R{bid.amount.toFixed(2)}
                   {i === 0 && <Text style={styles.highestBadge}> ★ Highest</Text>}
                 </Text>
               </View>
@@ -389,13 +389,13 @@ export default function ListingDetailScreen() {
           <View style={styles.modalCard}>
             <Text style={styles.modalTitle}>Place a Bid</Text>
             <Text style={styles.modalSubtitle}>
-              Current price: ${listing.current_price?.toFixed(2)} — bid must be higher
+              Current price: R{listing.current_price?.toFixed(2)} — bid must be higher
             </Text>
 
             {bidError ? <Text style={styles.modalError}>{bidError}</Text> : null}
 
             <View style={styles.bidInputRow}>
-              <Text style={styles.currencySymbol}>$</Text>
+              <Text style={styles.currencySymbol}>R</Text>
               <TextInput
                 style={styles.bidInput}
                 value={bidAmount}
@@ -446,7 +446,7 @@ export default function ListingDetailScreen() {
             {offerError ? <Text style={styles.modalError}>{offerError}</Text> : null}
 
             <View style={styles.bidInputRow}>
-              <Text style={styles.currencySymbol}>$</Text>
+              <Text style={styles.currencySymbol}>R</Text>
               <TextInput
                 style={styles.bidInput}
                 value={offerAmount}

@@ -75,7 +75,7 @@ export default function BidsScreen() {
         )}
         <View style={styles.itemInfo}>
           <Text style={styles.itemTitle} numberOfLines={2}>{item.title}</Text>
-          <Text style={styles.itemPrice}>${item.current_price?.toFixed(2)}</Text>
+          <Text style={styles.itemPrice}>R{item.current_price?.toFixed(2)}</Text>
           <CountdownTimer endTime={item.auction_end_time} />
         </View>
       </TouchableOpacity>
@@ -107,7 +107,7 @@ export default function BidsScreen() {
             </View>
           </View>
           <Text style={styles.itemTitle} numberOfLines={2}>{item.title}</Text>
-          <Text style={styles.itemPrice}>${item.current_price?.toFixed(2)}</Text>
+          <Text style={styles.itemPrice}>R{item.current_price?.toFixed(2)}</Text>
           {item.status === 'active' && <CountdownTimer endTime={item.auction_end_time} />}
         </View>
         {item.status === 'active' && (

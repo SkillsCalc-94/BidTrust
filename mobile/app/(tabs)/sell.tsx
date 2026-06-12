@@ -162,22 +162,15 @@ export default function SellScreen() {
     setPhotos(prev => prev.filter((_, i) => i !== index));
   }
 
-  async function runAIEstimate() {
-    if (photos.length === 0) {
-      Alert.alert('Add Photos', 'Please add at least one photo first');
-      return;
-    }
+  async function runAIEstimateWithPhotos(photoList: string[]) {
+    if (photoList.length === 0) return;
     setAiLoading(true);
     setAiError('');
     try {
       const formData = new FormData();
-      photos.slice(0, 5).forEach((uri, i) => {
-        const ext = uri.split('.').pop() || 'jpg';
-        (formData as any).append('images', {
-          uri,
-          type: `image/${ext}`,
-          name: `photo_${i}.${ext}`,
-        } as any);
+      photoList.slice(0, 5).forEach((uri, i) => {
+        const ext = uri.split('.').pop()?.split(';')[0] || 'jpg';
+        (formData as any).append('images', { uri, type: `image/${ext}`, name: `photo_${i}.${ext}` } as any);
       });
       formData.append('item_name', title || 'Unknown item');
       formData.append('condition', condition || 'good');
@@ -188,13 +181,58 @@ export default function SellScreen() {
       if (q1Defects) formData.append('q1_defects', q1Defects);
       if (q2Accessories) formData.append('q2_accessories', q2Accessories);
       if (q3Reason) formData.append('q3_reason', q3Reason);
-
       const data = await api.postFormData<{ estimate: AIEstimate }>('/ai/estimate', formData);
       setAiEstimate(data.estimate);
     } catch (err: any) {
       setAiError(err.message || 'AI estimate failed');
     } finally {
       setAiLoading(false);
+    }
+  }
+
+  async function runAIEstimate() {
+    if (photos.length === 0) {
+      Alert.alert('Add Photos', 'Please add at least one photo first');
+      return;
+    }
+    await runAIEstimateWithPhotos(photos.slice(0, 5));
+  }
+
+  async function quickScanAndEstimate() {
+    if (Platform.OS === 'web') {
+      return new Promise<void>((resolve) => {
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = 'image/*';
+        input.capture = 'environment';
+        input.onchange = async (e: any) => {
+          const file = e.target.files?.[0];
+          if (!file) { resolve(); return; }
+          const reader = new FileReader();
+          reader.onload = async () => {
+            const uri = reader.result as string;
+            setPhotos(prev => [uri, ...prev].slice(0, 10));
+            // slight delay so state updates before running estimate
+            setTimeout(async () => {
+              await runAIEstimateWithPhotos([uri]);
+              resolve();
+            }, 100);
+          };
+          reader.readAsDataURL(file);
+        };
+        input.click();
+      });
+    }
+    const permission = await ImagePicker.requestCameraPermissionsAsync();
+    if (!permission.granted) {
+      Alert.alert('Permission needed', 'Please allow camera access');
+      return;
+    }
+    const result = await ImagePicker.launchCameraAsync({ quality: 0.8 });
+    if (!result.canceled) {
+      const uri = result.assets[0].uri;
+      setPhotos(prev => [uri, ...prev].slice(0, 10));
+      await runAIEstimateWithPhotos([uri]);
     }
   }
 
@@ -359,6 +397,18 @@ export default function SellScreen() {
       <Text style={styles.stepTitle}>Add Photos</Text>
       <Text style={styles.stepSubtitle}>Up to 10 photos. First photo is the cover.</Text>
 
+      {/* Quick Scan Button */}
+      <TouchableOpacity style={styles.quickScanBtn} onPress={quickScanAndEstimate}>
+        <View style={styles.quickScanIconWrap}>
+          <Ionicons name="camera" size={26} color="#f97316" />
+        </View>
+        <View style={styles.quickScanText}>
+          <Text style={styles.quickScanTitle}>Scan Item for Instant AI Estimate</Text>
+          <Text style={styles.quickScanSubtitle}>Open camera → auto price analysis</Text>
+        </View>
+        <Ionicons name="arrow-forward" size={18} color="#f97316" />
+      </TouchableOpacity>
+
       {/* Upload zone */}
       {photos.length === 0 ? (
         <TouchableOpacity style={styles.uploadZone} onPress={pickImages}>
@@ -472,7 +522,7 @@ export default function SellScreen() {
           <View style={styles.aiButtons}>
             <TouchableOpacity
               style={[styles.aiBtn, aiLoading && styles.btnDisabled]}
-              onPress={runAIEstimate}
+              onPress={() => runAIEstimateWithPhotos(photos.slice(0, 5))}
               disabled={aiLoading}
             >
               {aiLoading ? (
@@ -1801,5 +1851,39 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     paddingHorizontal: 12,
     paddingVertical: 10,
+  },
+  quickScanBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    backgroundColor: 'rgba(249,115,22,0.08)',
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 16,
+    borderWidth: 1.5,
+    borderColor: 'rgba(249,115,22,0.4)',
+  },
+  quickScanIconWrap: {
+    width: 48,
+    height: 48,
+    borderRadius: 14,
+    backgroundColor: 'rgba(249,115,22,0.15)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(249,115,22,0.3)',
+  },
+  quickScanText: {
+    flex: 1,
+  },
+  quickScanTitle: {
+    color: '#f1f1f1',
+    fontSize: 15,
+    fontWeight: '700',
+    marginBottom: 2,
+  },
+  quickScanSubtitle: {
+    color: '#a0a0b8',
+    fontSize: 12,
   },
 });

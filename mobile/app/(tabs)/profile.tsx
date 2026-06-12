@@ -279,7 +279,7 @@ export default function ProfileScreen() {
 
         <View style={styles.menuDivider} />
 
-        <TouchableOpacity style={styles.menuRow}>
+        <TouchableOpacity style={styles.menuRow} onPress={() => Alert.alert('Help & Support', 'Email us at support@bidtrust.co.za or visit our website for FAQs.')}>
           <View style={[styles.menuIconWrap, { backgroundColor: 'rgba(16,185,129,0.1)' }]}>
             <Ionicons name="help-circle-outline" size={18} color="#10b981" />
           </View>
@@ -294,7 +294,7 @@ export default function ProfileScreen() {
       {/* Legal Section */}
       <Text style={styles.sectionLabel}>LEGAL</Text>
       <View style={styles.menuSection}>
-        <TouchableOpacity style={styles.menuRow}>
+        <TouchableOpacity style={styles.menuRow} onPress={() => Alert.alert('Privacy Policy', 'Our privacy policy is available at bidtrust.co.za/privacy')}>
           <View style={[styles.menuIconWrap, { backgroundColor: 'rgba(160,160,184,0.08)' }]}>
             <Ionicons name="document-text-outline" size={18} color="#a0a0b8" />
           </View>
@@ -306,7 +306,7 @@ export default function ProfileScreen() {
 
         <View style={styles.menuDivider} />
 
-        <TouchableOpacity style={styles.menuRow}>
+        <TouchableOpacity style={styles.menuRow} onPress={() => Alert.alert('Terms of Service', 'Our terms of service are available at bidtrust.co.za/terms')}>
           <View style={[styles.menuIconWrap, { backgroundColor: 'rgba(160,160,184,0.08)' }]}>
             <Ionicons name="shield-outline" size={18} color="#a0a0b8" />
           </View>
