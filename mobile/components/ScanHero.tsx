@@ -140,7 +140,9 @@ export default function ScanHero() {
         fd.append('barcode_type', scan.barcode.type);
       }
 
-      const res = await fetch(`${API_BASE}/scan/demo`, { method: 'POST', body: fd });
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 30000);
+      const res = await fetch(`${API_BASE}/scan/demo`, { method: 'POST', body: fd, signal: controller.signal }).finally(() => clearTimeout(timer));
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
         throw new Error(err.error || `Server error ${res.status}`);
@@ -150,7 +152,10 @@ export default function ScanHero() {
       setImageUrl(data.image_url);
       setPhase('questions'); // always show questions
     } catch (err: any) {
-      setErrorMsg(err.message || 'Could not identify item. Please try again.');
+      const msg = err.name === 'AbortError'
+        ? 'Server is waking up — please try again in 30 seconds.'
+        : err.message || 'Could not identify item. Please try again.';
+      setErrorMsg(msg);
       setPhase('error');
     }
   }
@@ -173,11 +178,14 @@ export default function ScanHero() {
         if (accessories) body.q2_accessories = accessories;
       }
 
+      const controller2 = new AbortController();
+      const timer2 = setTimeout(() => controller2.abort(), 40000);
       const res = await fetch(`${API_BASE}/scan/demo/price`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
-      });
+        signal: controller2.signal,
+      }).finally(() => clearTimeout(timer2));
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
         throw new Error(err.error || `Server error ${res.status}`);
@@ -186,7 +194,10 @@ export default function ScanHero() {
       setCompetitorPrices(data.competitor_prices);
       setPhase('result');
     } catch (err: any) {
-      setErrorMsg(err.message || 'Price research failed. Please try again.');
+      const msg = err.name === 'AbortError'
+        ? 'Request timed out. The server may be waking up — please try again in 30 seconds.'
+        : err.message || 'Price research failed. Please try again.';
+      setErrorMsg(msg);
       setPhase('error');
     }
   }
