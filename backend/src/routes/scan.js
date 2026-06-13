@@ -6,7 +6,9 @@ import { upload } from '../config/cloudinary.js';
 const router = Router();
 let _anthropic = null;
 function getAnthropic() {
-  if (!_anthropic) _anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+  const key = process.env.ANTHROPIC_API_KEY;
+  if (!key) throw new Error('ANTHROPIC_API_KEY environment variable is not set on this server');
+  if (!_anthropic) _anthropic = new Anthropic({ apiKey: key });
   return _anthropic;
 }
 
@@ -289,6 +291,15 @@ router.post('/demo/price', demoRateLimit, async (req, res) => {
     console.error('Demo price error:', err);
     res.status(500).json({ error: 'Price research failed' });
   }
+});
+
+// ── GET /api/scan/status — check env vars are set (no auth) ──────────────────
+router.get('/status', (req, res) => {
+  res.json({
+    anthropic_key_set: !!process.env.ANTHROPIC_API_KEY,
+    cloudinary_set: !!(process.env.CLOUDINARY_CLOUD_NAME && process.env.CLOUDINARY_API_KEY && process.env.CLOUDINARY_API_SECRET),
+    supabase_set: !!process.env.SUPABASE_URL,
+  });
 });
 
 export default router;
