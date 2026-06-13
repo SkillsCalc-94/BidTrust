@@ -6,7 +6,8 @@ import authenticate from '../middleware/auth.js';
 const router = Router();
 let _stripe = null;
 function getStripe() {
-  if (!_stripe) _stripe = new Stripe(process.env.STRIPE_SECRET_KEY || 'sk_test_placeholder');
+  if (!process.env.STRIPE_SECRET_KEY) throw new Error('Stripe not configured yet');
+  if (!_stripe) _stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
   return _stripe;
 }
 

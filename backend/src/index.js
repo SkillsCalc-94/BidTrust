@@ -6,9 +6,16 @@ import authRoutes from './routes/auth.js';
 import listingsRoutes from './routes/listings.js';
 import bidsRoutes from './routes/bids.js';
 import offersRoutes from './routes/offers.js';
-import paymentsRoutes from './routes/payments.js';
 import aiRoutes from './routes/ai.js';
 import scanRoutes from './routes/scan.js';
+
+// Payments route loaded dynamically so missing STRIPE_SECRET_KEY doesn't crash startup
+let paymentsRoutes = null;
+try {
+  paymentsRoutes = (await import('./routes/payments.js')).default;
+} catch (e) {
+  console.warn('Payments route not loaded:', e.message);
+}
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -34,7 +41,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/listings', listingsRoutes);
 app.use('/api/bids', bidsRoutes);
 app.use('/api/offers', offersRoutes);
-app.use('/api/payments', paymentsRoutes);
+if (paymentsRoutes) app.use('/api/payments', paymentsRoutes);
 app.use('/api/ai', aiRoutes);
 app.use('/api/scan', scanRoutes);
 
