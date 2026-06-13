@@ -27,7 +27,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import CameraScanner, { ScanResult } from './CameraScanner';
 
-const API_BASE = process.env.EXPO_PUBLIC_API_URL || 'https://bidtrust-api.onrender.com/api';
+const API_BASE = process.env.EXPO_PUBLIC_API_URL || 'https://bidtrust.onrender.com/api';
 
 type Phase = 'idle' | 'scanning' | 'identifying' | 'questions' | 'pricing' | 'result' | 'error';
 
