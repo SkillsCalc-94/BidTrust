@@ -4,7 +4,11 @@ import supabase from '../config/supabase.js';
 import authenticate from '../middleware/auth.js';
 
 const router = Router();
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
+let _stripe = null;
+function getStripe() {
+  if (!_stripe) _stripe = new Stripe(process.env.STRIPE_SECRET_KEY || 'sk_test_placeholder');
+  return _stripe;
+}
 
 const PLATFORM_FEE_PERCENT = 0.05; // 5%
 
@@ -75,7 +79,7 @@ router.post('/create-payment-intent', authenticate, async (req, res) => {
     const platformFee = Math.round(winningAmount * PLATFORM_FEE_PERCENT * 100);
     const totalAmountCents = Math.round(winningAmount * 100) + platformFee;
 
-    const paymentIntent = await stripe.paymentIntents.create({
+    const paymentIntent = await getStripe().paymentIntents.create({
       amount: totalAmountCents,
       currency: 'usd',
       capture_method: 'manual', // escrow hold
@@ -112,7 +116,7 @@ router.post('/confirm-payment', authenticate, async (req, res) => {
       return res.status(400).json({ error: 'payment_intent_id and listing_id are required' });
     }
 
-    const paymentIntent = await stripe.paymentIntents.retrieve(payment_intent_id);
+    const paymentIntent = await getStripe().paymentIntents.retrieve(payment_intent_id);
 
     if (paymentIntent.metadata.buyer_id !== req.user.id) {
       return res.status(403).json({ error: 'Not authorized' });
@@ -185,7 +189,7 @@ router.post('/release-payment', authenticate, async (req, res) => {
     }
 
     // Capture the payment (release from escrow to seller)
-    const capturedIntent = await stripe.paymentIntents.capture(payment_intent_id);
+    const capturedIntent = await getStripe().paymentIntents.capture(payment_intent_id);
 
     // Update transaction
     await supabase
@@ -237,15 +241,15 @@ router.post('/refund', authenticate, async (req, res) => {
       return res.status(403).json({ error: 'Not authorized to refund this payment' });
     }
 
-    const paymentIntent = await stripe.paymentIntents.retrieve(payment_intent_id);
+    const paymentIntent = await getStripe().paymentIntents.retrieve(payment_intent_id);
 
     let result;
     if (paymentIntent.status === 'requires_capture') {
       // Cancel (not yet captured)
-      result = await stripe.paymentIntents.cancel(payment_intent_id);
+      result = await getStripe().paymentIntents.cancel(payment_intent_id);
     } else if (paymentIntent.status === 'succeeded') {
       // Refund captured payment
-      result = await stripe.refunds.create({
+      result = await getStripe().refunds.create({
         payment_intent: payment_intent_id,
         reason: reason || 'requested_by_customer',
       });
@@ -277,7 +281,7 @@ router.post('/webhook', async (req, res) => {
   let event;
 
   try {
-    event = stripe.webhooks.constructEvent(
+    event = getStripe().webhooks.constructEvent(
       req.body,
       sig,
       process.env.STRIPE_WEBHOOK_SECRET
