@@ -83,6 +83,11 @@ export default function ScanHero() {
   const pulseAnim = useRef(new Animated.Value(1)).current;
   const fadeAnim = useRef(new Animated.Value(0)).current;
 
+  // Pre-warm Render backend on mount so it's awake when user taps Scan
+  useEffect(() => {
+    fetch(`${API_BASE}/health`, { method: 'GET' }).catch(() => {});
+  }, []);
+
   // Idle pulse on scan button
   useEffect(() => {
     if (phase !== 'idle') return;

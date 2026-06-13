@@ -1,6 +1,6 @@
 import { Platform } from 'react-native';
 
-const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3001/api';
+const API_URL = process.env.EXPO_PUBLIC_API_URL || 'https://bidtrust.onrender.com/api';
 
 // Lazy import to avoid circular deps — auth.ts imports api.ts
 function getSupabase() {
