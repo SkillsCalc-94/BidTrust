@@ -4,7 +4,11 @@ import authenticate from '../middleware/auth.js';
 import { upload, uploadSingle } from '../config/cloudinary.js';
 
 const router = Router();
-const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+let _anthropic = null;
+function getAnthropic() {
+  if (!_anthropic) _anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+  return _anthropic;
+}
 
 // POST /api/ai/estimate — 4-phase AI valuation with images
 router.post('/estimate', authenticate, upload.array('images', 5), async (req, res) => {
@@ -93,7 +97,7 @@ Respond ONLY with this exact JSON structure (no markdown, no extra text):
       { type: 'text', text: userPrompt },
     ];
 
-    const message = await anthropic.messages.create({
+    const message = await getAnthropic().messages.create({
       model: 'claude-sonnet-4-6',
       max_tokens: 1500,
       system: 'You are an expert secondhand marketplace appraiser specialising in the South African market. You analyse item photos and seller details to produce accurate, data-driven valuations in ZAR (South African Rand). You know SA platforms like OLX, Gumtree, Facebook Marketplace, and Bid or Buy. Always respond with valid JSON only — no markdown code fences.',
@@ -128,7 +132,7 @@ router.post('/describe', authenticate, uploadSingle.single('image'), async (req,
       return res.status(400).json({ error: 'An image is required' });
     }
 
-    const message = await anthropic.messages.create({
+    const message = await getAnthropic().messages.create({
       model: 'claude-sonnet-4-6',
       max_tokens: 512,
       system: 'You are an expert marketplace listing writer for the South African secondhand market. Analyse item photos and generate compelling, accurate listing titles and descriptions. Always respond with valid JSON only.',

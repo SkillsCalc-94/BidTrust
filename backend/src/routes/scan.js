@@ -4,7 +4,11 @@ import authenticate from '../middleware/auth.js';
 import { upload } from '../config/cloudinary.js';
 
 const router = Router();
-const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+let _anthropic = null;
+function getAnthropic() {
+  if (!_anthropic) _anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+  return _anthropic;
+}
 
 // ── Barcode product lookup (UPC Item DB — free tier) ─────────────────────────
 async function lookupBarcode(code) {
@@ -33,7 +37,7 @@ async function lookupBarcode(code) {
 
 // ── AI vision: identify item, return category + item_type ────────────────────
 async function identifyFromPhoto(imageUrl) {
-  const message = await anthropic.messages.create({
+  const message = await getAnthropic().messages.create({
     model: 'claude-sonnet-4-6',
     max_tokens: 700,
     system: 'You are an expert item identification AI for the South African secondhand market. Identify products from photos with high accuracy. Always respond with valid JSON only.',
@@ -118,7 +122,7 @@ Respond ONLY with this exact JSON (no markdown, no extra text):
   "price_insight": "<2 sentences about this product's SA market, factoring in any seller-provided details>"
 }`;
 
-  const message = await anthropic.messages.create({
+  const message = await getAnthropic().messages.create({
     model: 'claude-sonnet-4-6',
     max_tokens: 1000,
     system: 'You are a South African marketplace pricing expert with deep knowledge of OLX SA, Gumtree SA, Takealot, and all major SA retail/secondhand platforms. Always respond with valid JSON only — no markdown code fences.',
